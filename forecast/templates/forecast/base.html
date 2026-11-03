@@ -1,0 +1,127 @@
+{% load static qsr %}<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="csrf-token" content="{{ csrf_token }}">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}QSR Forecast{% endblock %}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: { sans: ['Roboto', 'sans-serif'] },
+          colors: {
+            ink: '#1A2321',
+            page: '#F5F5F0',
+            mint: '#8FD5C7',
+            forest: '#22533F',
+            sage: '#8FA89B',
+          },
+        },
+      },
+    }
+  </script>
+</head>
+<body class="font-sans bg-page text-ink min-h-screen" data-role="{{ role|default:'manager' }}" data-user="{{ request.user.first_name|default:request.user.username }}" data-store="{% if my_store %}{{ my_store.pk }} · {{ my_store.restaurant_name }}{% endif %}">
+{% block body %}
+<div class="flex min-h-screen">
+  <!-- Sidebar -->
+  <aside class="w-[232px] shrink-0 bg-gradient-to-b from-[#E9E0EE] to-page flex flex-col justify-between p-4 sticky top-0 h-screen">
+    <div>
+      <a href="{% url 'forecast:home' %}" class="flex items-center gap-2.5 px-1 py-3 mb-4">
+        <span class="w-9 h-9 rounded-xl bg-ink text-white grid place-items-center">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 17l6-6 4 4 8-8M15 7h6v6"/></svg>
+        </span>
+        <span class="font-medium text-lg">QSR Forecast</span>
+      </a>
+      {% with active=active_menu|default:'dashboard' %}
+      <nav class="flex flex-col gap-1.5 text-sm">
+        {% if role == 'admin' %}
+          {% include 'forecast/_nav_item.html' with url='forecast:data' key='data' label='Dữ liệu' icon='<ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/>' %}
+          {% include 'forecast/_nav_item.html' with url='forecast:model' key='model' label='Dự báo & Mô hình' icon='<path d="M4 20V4M4 20h16M9 20v-8M14 20V8M19 20v-5"/>' %}
+          {% include 'forecast/_nav_item.html' with url='forecast:stores' key='stores' label='Cửa hàng' icon='<path d="M3 9l1-5h16l1 5M3 9v11h18V9M3 9h18M9 20v-6h6v6"/>' %}
+          {% include 'forecast/_nav_item.html' with url='forecast:accounts' key='accounts' label='Tài khoản' icon='<circle cx="9" cy="8" r="3.5"/><path d="M2 20c0-3.5 3-6 7-6s7 2.5 7 6M16 4.5a3.5 3.5 0 010 7M22 20c0-2.8-1.8-4.8-4.5-5.6"/>' %}
+          {% include 'forecast/_nav_item.html' with url='forecast:config' key='config' label='Cấu hình' icon='<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 00.3 1.8l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.7 1.7 0 00-1.8-.3 1.7 1.7 0 00-1 1.5V21a2 2 0 11-4 0v-.1a1.7 1.7 0 00-1.1-1.5 1.7 1.7 0 00-1.8.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.7 1.7 0 00.3-1.8 1.7 1.7 0 00-1.5-1H3a2 2 0 110-4h.1a1.7 1.7 0 001.5-1.1 1.7 1.7 0 00-.3-1.8l-.1-.1a2 2 0 112.8-2.8l.1.1a1.7 1.7 0 001.8.3H9a1.7 1.7 0 001-1.5V3a2 2 0 114 0v.1a1.7 1.7 0 001 1.5 1.7 1.7 0 001.8-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.7 1.7 0 00-.3 1.8V9a1.7 1.7 0 001.5 1H21a2 2 0 110 4h-.1a1.7 1.7 0 00-1.5 1z"/>' %}
+        {% elif role == 'staff' %}
+          {% include 'forecast/_nav_item.html' with url='forecast:staff_prep' key='staff_prep' label='Chuẩn bị hàng' icon='<rect x="4" y="3" width="16" height="18" rx="2"/><path d="M9 12l2 2 4-4"/>' %}
+          {% include 'forecast/_nav_item.html' with url='forecast:inventory' key='inventory' label='Kiểm kho' icon='<path d="M12 3l8 4.5v9L12 21l-8-4.5v-9L12 3zM12 12l8-4.5M12 12v9M12 12L4 7.5"/>' %}
+        {% else %}
+          {% include 'forecast/_nav_item.html' with url='forecast:dashboard' key='dashboard' label='Tổng quan' icon='<path d="M3 11l9-8 9 8v9a1 1 0 01-1 1h-5v-6H9v6H4a1 1 0 01-1-1v-9z"/>' %}
+          {% include 'forecast/_nav_item.html' with url='forecast:prep' key='prep' label='Chuẩn bị hàng' icon='<rect x="4" y="3" width="16" height="18" rx="2"/><path d="M9 12l2 2 4-4"/>' %}
+          {% include 'forecast/_nav_item.html' with url='forecast:forecast' key='forecast' label='Dự báo' icon='<path d="M3 17l6-6 4 4 8-8M15 7h6v6"/>' %}
+          {% include 'forecast/_nav_item.html' with url='forecast:report' key='report' label='Báo cáo' icon='<path d="M4 20V4M4 20h16M9 20v-8M14 20V8M19 20v-5"/>' %}
+        {% endif %}
+      </nav>
+      {% endwith %}
+    </div>
+
+    <div>
+      <div class="bg-white rounded-2xl p-3 flex items-center gap-3 mb-4 shadow-sm">
+        <span class="w-9 h-9 rounded-full bg-mint grid place-items-center text-sm font-medium">{{ request.user.first_name|default:request.user.username|initial }}</span>
+        <div class="text-sm leading-tight text-ink/80">
+          <div>{{ request.user.first_name|default:request.user.username }}</div>
+          <div>{% if role == 'admin' %}Toàn hệ thống{% else %}{{ profile_obj.get_role_display }}{% endif %}</div>
+        </div>
+      </div>
+      <a href="{% url 'forecast:profile' %}" class="flex items-center gap-2 px-2 mb-1 text-sm text-ink/70 hover:text-ink">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-7 8-7s8 3 8 7"/></svg>
+        Hồ sơ cá nhân
+      </a>
+      <form method="post" action="{% url 'forecast:logout' %}">
+        {% csrf_token %}
+        <button type="submit" class="flex items-center gap-2 px-2 text-sm text-ink/70 hover:text-ink">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9"/></svg>
+          Đăng xuất
+        </button>
+      </form>
+    </div>
+  </aside>
+
+  <!-- Main -->
+  <main class="flex-1 min-w-0 px-8 py-5">
+    <header class="flex items-center justify-between text-sm text-ink/80">
+      <div class="flex items-center gap-3">
+        {% if role == 'admin' %}
+        <span class="flex items-center gap-2">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 1.7 3.6 3 8 3s8-1.3 8-3V5"/></svg>
+          Phạm vi: Toàn hệ thống · 15 cửa hàng
+        </span>
+        {% else %}
+        <span class="flex items-center gap-2">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 9l1-5h16l1 5M3 9v11h18V9M3 9h18M9 20v-6h6v6"/></svg>
+          {{ my_store.pk }} · {{ my_store.restaurant_name }}
+        </span>
+        <span class="w-px h-4 bg-ink/20"></span>
+        <span>Ngày vận hành: {{ operating_date|dm }}</span>
+        {% endif %}
+      </div>
+      <button type="button" data-act="notif" aria-label="Thông báo" class="relative w-11 h-11 rounded-full bg-white border border-ink/10 grid place-items-center">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 17h5l-1.4-1.4A2 2 0 0118 14.2V11a6 6 0 10-12 0v3.2a2 2 0 01-.6 1.4L4 17h5m6 0a3 3 0 11-6 0"/></svg>
+        {% if unread_count %}<span id="notif-badge" class="absolute -top-1 -right-1 min-w-5 h-5 px-1 rounded-full bg-[#9B1C1C] text-white text-[11px] grid place-items-center">{{ unread_count }}</span>{% endif %}
+      </button>
+    </header>
+
+    {% block content %}{% endblock %}
+  </main>
+</div>
+{% endblock %}
+<script>
+  window.QSR_URLS = {
+    dashboard: "{% url 'forecast:dashboard' %}", prep: "{% url 'forecast:prep' %}", forecast: "{% url 'forecast:forecast' %}",
+    staff_prep: "{% url 'forecast:staff_prep' %}", inventory: "{% url 'forecast:inventory' %}", data: "{% url 'forecast:data' %}",
+    accounts: "{% url 'forecast:accounts' %}", login: "{% url 'forecast:login' %}"
+  };
+  window.QSR_API = {
+    run: "{% url 'forecast:api_run_forecast' %}",
+    saveInventory: "{% url 'forecast:api_save_inventory' %}", notifications: "{% url 'forecast:api_notifications' %}",
+    readNotifications: "{% url 'forecast:api_read_notifications' %}", password: "{% url 'forecast:api_change_password' %}",
+    prefs: "{% url 'forecast:api_save_prefs' %}", passwordReset: "{% url 'forecast:api_password_reset' %}"
+  };
+</script>
+<script src="{% static 'forecast/js/modals.js' %}"></script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

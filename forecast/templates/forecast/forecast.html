@@ -1,0 +1,121 @@
+{% extends 'forecast/base.html' %}
+{% load qsr %}
+{% block title %}Dự báo nhu cầu · QSR Forecast{% endblock %}
+
+{% block content %}
+<div class="flex items-start justify-between mt-6 mb-5">
+  <div>
+    <h1 class="text-[28px] font-medium">Dự báo nhu cầu</h1>
+    <p class="text-sm text-ink/70">Mô hình dự báo 1 ngày tới · áp cùng tỷ lệ điều chỉnh cho mọi món</p>
+  </div>
+  <button type="button" data-act="prep-run" data-date="{{ day|dm }}" class="h-11 px-6 rounded-full bg-ink text-white text-sm font-medium">Tạo đề xuất chuẩn bị</button>
+</div>
+
+<form method="get" data-submit="view-forecast" class="flex items-center gap-3 mb-5 text-sm">
+  <span class="text-ink/70">Ngày dự báo</span>
+  <input type="text" name="date" readonly data-calendar="service" value="{{ day|dm }}" class="h-11 w-[256px] rounded-xl border border-ink/15 bg-white px-4 cursor-pointer">
+  <button type="submit" class="h-11 px-5 rounded-lg bg-ink text-white font-medium">Xem dự báo</button>
+</form>
+
+<section class="grid grid-cols-3 gap-4 mb-5">
+  {% for c in cards %}
+  <a href="?date={{ c.date|dm }}" class="rounded-xl p-4 {% if c.selected %}border-2 border-forest bg-[#E4F3EE]{% else %}border border-ink/10 bg-white{% endif %}">
+    <div class="flex justify-between text-sm"><span>{{ c.date|dm }}</span>{% if c.selected %}<span class="font-medium">Đang xem</span>{% endif %}</div>
+    {% if c.total %}
+    <div class="text-2xl font-medium my-2">{{ c.total|thousands }} phần</div>
+    <div class="text-sm text-ink/60">Đã có dự báo</div>
+    {% else %}
+    <div class="text-xl font-medium text-ink/60 my-2">Chưa có dự báo</div>
+    <div class="text-sm text-ink/60">Chờ số bán ngày trước</div>
+    {% endif %}
+  </a>
+  {% endfor %}
+</section>
+
+{% if not plan %}
+<section class="bg-white border border-ink/10 rounded-xl px-6 py-16 text-center text-sm text-ink/60">
+  Chưa có dự báo cho ngày {{ day|dm }}. Bấm “Tạo đề xuất chuẩn bị” để chạy mô hình.
+</section>
+{% else %}
+<div class="grid grid-cols-1 xl:grid-cols-[1fr_360px] gap-4 items-start">
+  <section class="bg-white border border-ink/10 rounded-xl overflow-hidden">
+    <div class="flex items-start justify-between p-5 text-sm">
+      <div>
+        <div class="font-medium">Dự báo theo món · Ngày: {{ day|dm }}</div>
+        <div class="text-ink/60">"Bình thường": Trung bình 7 ngày liền trước</div>
+      </div>
+      <div class="font-medium text-ink/80">Tổng dự báo: {{ total|thousands }} phần · Trạng thái: {% if plan.adjustment_pct %}Đã điều chỉnh {{ plan.adjustment_pct }}%{% else %}Chưa điều chỉnh{% endif %}</div>
+    </div>
+    <table class="w-full text-sm">
+      <thead class="bg-page text-ink/70">
+        <tr><th class="text-left font-normal px-5 py-3">Món</th><th class="text-right font-normal px-5 py-3">Dự báo</th><th class="text-right font-normal px-5 py-3">Bình thường</th><th class="text-right font-normal px-5 py-3">Chênh lệch</th></tr>
+      </thead>
+      <tbody class="divide-y divide-ink/10">
+        {% for l in lines %}
+        <tr><td class="px-5 py-3.5"><b class="font-medium">{{ l.product.menu_item_name }}</b> <span class="text-ink/60">{{ l.unit }}</span></td>
+          <td class="px-5 text-right">{{ l.shown }}</td><td class="px-5 text-right">{{ l.baseline_qty }}</td>
+          <td class="px-5 text-right text-forest">{% if l.diff > 0 %}↑ Nhiều hơn {{ l.diff }}%{% elif l.diff < 0 %}↓ Ít hơn {{ l.diff|cut:"-" }}%{% else %}Tương đương{% endif %}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <a href="#" data-act="fc-list" data-plan="{{ plan.pk }}" class="flex items-center gap-2 px-5 py-4 border-t border-ink/10 text-sm font-medium">→ Xem danh sách</a>
+    <div class="flex items-center justify-between px-5 py-4 border-t border-ink/10 text-sm">
+      <span class="text-ink/70">{{ lines.start_index }}–{{ lines.end_index }} / {{ lines.paginator.count }} món</span>
+      <div class="flex gap-2">
+        {% for n in lines.paginator.page_range %}
+        <a href="?date={{ day|dm }}&page={{ n }}" class="w-10 h-10 rounded-full inline-flex items-center justify-center {% if n == lines.number %}bg-ink text-white{% else %}border border-ink/20{% endif %}">{{ n }}</a>
+        {% endfor %}
+      </div>
+    </div>
+  </section>
+
+  <aside class="bg-white rounded-2xl overflow-hidden border border-ink/5">
+    <div class="p-5 text-sm">
+      <h3 class="font-medium pb-2 border-b border-ink/10">Yếu tố ảnh hưởng</h3>
+      {% if factors %}
+      <dl class="divide-y divide-ink/10">
+        <div class="flex gap-4 py-3"><dt class="w-20 text-ink/70">Sự kiện</dt><dd class="{% if factors.event %}font-medium text-forest{% endif %}">{{ factors.event|default:"Không" }}</dd></div>
+        <div class="flex gap-4 py-3"><dt class="w-20 text-ink/70">Thời tiết</dt><dd>{{ factors.weather }}</dd></div>
+        <div class="flex gap-4 py-3"><dt class="w-20 text-ink/70">Ngày lễ</dt><dd>{{ factors.holiday|default:"Không" }}</dd></div>
+        <div class="flex gap-4 py-3"><dt class="w-20 text-ink/70">Khuyến mãi</dt><dd>{% if factors.promos %}{{ factors.promos|join:", " }}{% else %}Không có món nào{% endif %}</dd></div>
+      </dl>
+      {% endif %}
+    </div>
+    <div class="bg-[#EEF0EC] p-5 text-sm">
+      <h3 class="font-medium mb-3">Điều chỉnh dự báo</h3>
+      <div id="fc-label" class="text-center font-medium mb-2">0% · Giữ nguyên</div>
+      <input id="fc-pct" type="range" min="-30" max="30" step="15" value="{{ plan.adjustment_pct }}" {% if plan.status != 'pending' %}disabled{% endif %} class="w-full accent-forest">
+      <div class="flex justify-between text-xs text-ink/70 mb-4"><span>−30%</span><span>−15%</span><span>0%</span><span>+15%</span><span>+30%</span></div>
+      <label class="block font-medium mb-2">Lý do điều chỉnh</label>
+      <select id="fc-reason" data-choice="reason" {% if plan.status != 'pending' %}disabled{% endif %} class="w-full h-11 rounded-xl border border-ink/15 bg-white px-3 mb-3">
+        <option>Chọn lý do</option>{% if plan.adjustment_reason %}<option selected>{{ plan.adjustment_reason }}</option>{% endif %}
+      </select>
+      <div class="bg-white rounded-2xl p-3 flex items-center justify-between mb-3">
+        <div><div class="text-ink/70">Hệ thống dự báo</div><div id="fc-base" data-base="{{ base_total }}" class="font-medium">{{ base_total|thousands }} phần</div></div>
+        <span class="text-ink/40">→</span>
+        <div><div class="text-ink/70">Quản lý chỉnh</div><div id="fc-total" class="font-medium">{{ total|thousands }} phần</div></div>
+      </div>
+      <button type="button" data-act="fc-save" data-plan="{{ plan.pk }}" {% if plan.status != 'pending' %}disabled title="Danh sách đã duyệt – cần mở lại để điều chỉnh"{% endif %} class="w-full h-11 rounded-full border border-ink/20 bg-white font-medium disabled:opacity-40">Lưu điều chỉnh</button>
+    </div>
+  </aside>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+{% if plan %}
+<script>
+  (function () {
+    var r = document.getElementById('fc-pct'), l = document.getElementById('fc-label'), t = document.getElementById('fc-total');
+    var base = +document.getElementById('fc-base').getAttribute('data-base');
+    function show() {
+      var p = +r.value;
+      l.textContent = p === 0 ? '0% · Giữ nguyên' : (p > 0 ? '+' : '−') + Math.abs(p) + '% · ' + (p > 0 ? 'Tăng' : 'Giảm');
+      t.textContent = Math.round(base * (1 + p / 100)).toLocaleString('vi-VN') + ' phần';
+    }
+    r.addEventListener('input', show);
+    show();
+  })();
+</script>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,36 @@
+# Môi trường ảo
+.venv/
+venv/
+ENV/
+
+# Python cache
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Dữ liệu nặng (Tránh đẩy 184MB CSV lên GitHub gây lỗi)
+data/
+*.csv
+*.xlsx
+*.parquet
+*.sqlite3
+
+# Mật khẩu CSDL
+.env
+
+# Mô hình đã train (sinh lại bằng các file Tests/App*.py)
+Assets/*.joblib
+Assets/*.pkl
+Assets/catboost_info/
+
+# Hệ điều hành Mac
+.DS_Store
+
+# Triển khai: web cần đúng mô hình tốt nhất + bảng metric (ghi đè các luật ở trên)
+!Assets/best_model.joblib
+!Assets/reports/metrics.csv
+
+# Tài liệu nặng không cần cho web
+Slides/
+popup/
+Assets/figures/

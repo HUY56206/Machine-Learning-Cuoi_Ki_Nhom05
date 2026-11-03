@@ -1,0 +1,104 @@
+{% extends 'forecast/base.html' %}
+{% load qsr %}
+{% block title %}Tổng quan · QSR Forecast{% endblock %}
+
+{% block content %}
+<h1 class="text-[28px] font-medium mt-8 mb-5">Tổng quan</h1>
+
+<form method="get" data-submit="view-data" class="flex items-center gap-3 mb-5 text-sm">
+  <span class="text-ink/70">Ngày phục vụ</span>
+  <input type="text" name="date" readonly data-calendar="service" value="{{ day|dm }}" class="h-11 w-[256px] rounded-xl border border-ink/15 bg-white px-4 text-sm cursor-pointer">
+  <button type="submit" class="h-11 px-5 rounded-lg bg-ink text-white font-medium">Xem dữ liệu</button>
+</form>
+
+<!-- Biểu đồ 7 ngày -->
+<section class="bg-white border border-ink/10 rounded-xl p-4 mb-10">
+  <h2 class="font-medium mb-3">Lượng bán 7 ngày (phần)</h2>
+  <div class="flex items-center gap-4 text-sm text-ink/70 mb-4">
+    <span class="flex items-center gap-1.5"><i class="w-2 h-2 rounded-full bg-sage"></i>Thực tế</span>
+    <span class="flex items-center gap-1.5"><i class="w-2 h-2 rounded-full bg-forest"></i>Dự báo</span>
+  </div>
+  <div class="grid grid-cols-7 gap-4 items-end h-[130px] border-b border-ink/10">
+    {% for b in bars %}
+    <div class="text-center">
+      <div class="text-xs mb-1">{% if b.value is not None %}{{ b.value|thousands }}{% else %}—{% endif %}</div>
+      <div class="mx-auto w-14 {% if b.forecast %}bg-forest{% else %}bg-sage{% endif %}" style="height:{{ b.height }}px"></div>
+    </div>
+    {% endfor %}
+  </div>
+  <div class="grid grid-cols-7 gap-4 text-center text-sm text-ink/80 mt-2">
+    {% for b in bars %}<span>{{ b.label|dm }}</span>{% endfor %}
+  </div>
+</section>
+
+<!-- Thẻ thống kê -->
+<section class="grid grid-cols-3 gap-4 mb-4">
+  {% if config.alert_red %}<div class="rounded-xl border border-[#F3B6B6] bg-gradient-to-r from-[#FDE3E3] to-[#FFF1F1] border-l-4 border-l-[#C0392B] px-4 py-4 flex items-center justify-between">
+    <div class="text-[#9B1C1C]"><div class="text-[28px] font-bold leading-tight">{{ counts.short }} món</div><div class="font-bold text-lg">Thiếu hàng</div></div>
+    <span class="w-12 h-12 rounded-full bg-white border border-[#F3B6B6] grid place-items-center text-[#9B1C1C]">
+      <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 3l10 18H2L12 3zM12 10v4M12 17.5v.01"/></svg>
+    </span>
+  </div>
+  {% endif %}
+  {% if config.alert_yellow %}<div class="rounded-xl border border-[#F2D58A] bg-gradient-to-r from-[#FFF0C9] to-[#FFF8E3] border-l-4 border-l-[#E0A100] px-4 py-4 flex items-center justify-between">
+    <div class="text-[#8A5A00]"><div class="text-[28px] font-bold leading-tight">{{ counts.topup }} món</div><div class="font-bold text-lg">Cần bổ sung</div></div>
+    <span class="w-12 h-12 rounded-full bg-white border border-[#F2D58A] grid place-items-center text-[#8A5A00]">
+      <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 19V5M5 12l7-7 7 7"/></svg>
+    </span>
+  </div>
+  {% endif %}
+  <div class="rounded-xl border border-[#A7DCCB] bg-gradient-to-r from-[#D4F0E7] to-[#EAF8F3] border-l-4 border-l-forest px-4 py-4 flex items-center justify-between">
+    <div class="text-forest"><div class="text-[28px] font-bold leading-tight">{{ counts.ok }} món</div><div class="font-bold text-lg">Đủ hàng</div></div>
+    <span class="w-12 h-12 rounded-full bg-white border border-[#A7DCCB] grid place-items-center text-forest">
+      <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
+    </span>
+  </div>
+</section>
+
+<!-- Việc cần xử lý -->
+<section class="bg-white border border-ink/10 rounded-xl w-full lg:w-[74%] overflow-hidden">
+  <div class="flex items-start justify-between p-4">
+    <div>
+      <h2 class="font-medium">Việc cần xử lý</h2>
+      <p class="text-sm text-ink/60">{% if plan %}Thiếu hàng: {{ counts.short }} món{% else %}Chưa có đề xuất chuẩn bị cho ngày này{% endif %}</p>
+    </div>
+    <a href="{% url 'forecast:prep' %}?date={{ day|dm }}" class="flex items-center gap-2 text-sm font-medium mt-1">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 12h14M13 6l6 6-6 6"/></svg>
+      Mở Chuẩn bị hàng
+    </a>
+  </div>
+  {% if todo %}
+  <table class="w-full text-sm">
+    <thead class="bg-page text-ink/70">
+      <tr>
+        <th class="text-left font-normal px-4 py-3">Món</th>
+        <th class="text-right font-normal px-4 py-3">Số lượng</th>
+        <th class="text-center font-normal px-4 py-3">Trạng thái</th>
+        <th class="text-center font-normal px-4 py-3">Chi tiết</th>
+      </tr>
+    </thead>
+    <tbody class="divide-y divide-ink/10">
+      {% for l in todo %}
+      <tr>
+        <td class="px-4 py-5 font-medium">{{ l.product.menu_item_name }}</td>
+        <td class="px-4 text-right">{{ l.applied_qty }}</td>
+        <td class="px-4 text-center"><span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#F6B8B8] text-[#9B1C1C] font-medium"><i class="w-1.5 h-1.5 rounded-full bg-[#9B1C1C]"></i>Thiếu hàng</span></td>
+        <td class="px-4 text-center"><button type="button" data-act="prep-reason" data-line="{{ l.pk }}" data-name="{{ l.product.menu_item_name }}" data-unit="{{ l.unit }}" data-fc="{{ l.forecast_qty }}" data-safe="{{ l.safety_stock }}" data-cur="{{ l.current_stock }}" data-applied="{{ l.applied_qty }}" class="px-4 py-1.5 rounded-full bg-[#DDF2EA] text-forest font-medium">Xem</button></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <div class="flex items-center justify-between px-4 py-3 border-t border-ink/10 text-sm">
+    <span class="text-ink/70">{{ todo.start_index }}–{{ todo.end_index }} / {{ todo.paginator.count }} món</span>
+    <div class="flex gap-2">{% for n in todo.paginator.page_range %}<a href="?date={{ day|dm }}&page={{ n }}" class="w-9 h-9 rounded-full inline-flex items-center justify-center {% if n == todo.number %}bg-ink text-white{% else %}border border-ink/20{% endif %}">{{ n }}</a>{% endfor %}</div>
+  </div>
+  {% elif plan %}
+  <p class="px-4 pb-6 text-sm text-ink/60">Không có món nào thiếu hàng.</p>
+  {% elif no_data %}
+  <p class="px-4 pb-2 text-sm text-ink/60">Chưa có dữ liệu cho ngày đã chọn.</p>
+  <button type="button" onclick="document.querySelector('[data-calendar]').click()" class="mx-4 mb-6 h-9 px-4 rounded-full border border-ink/20 text-sm font-medium">Chọn ngày</button>
+  {% else %}
+  <p class="px-4 pb-6 text-sm text-ink/60">Nhân viên cần lưu kiểm kho, hoặc quản lý bấm “Chạy dự báo” ở trang Chuẩn bị hàng.</p>
+  {% endif %}
+</section>
+{% endblock %}

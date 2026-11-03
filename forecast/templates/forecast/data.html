@@ -1,0 +1,47 @@
+{% extends 'forecast/base.html' %}
+{% load qsr %}
+{% block title %}Dữ liệu · QSR Forecast{% endblock %}
+
+{% block content %}
+<div class="flex items-center justify-between mt-6 mb-5">
+  <h1 class="text-[28px] font-medium">Dữ liệu</h1>
+  <button type="button" data-act="data-import" class="h-11 px-5 rounded-full bg-ink text-white text-sm font-medium flex items-center gap-2">
+    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v12m0 0l-4-4m4 4l4-4M4 20h16"/></svg>Nhập dữ liệu
+  </button>
+</div>
+
+<form method="get" data-submit="filter-data" class="flex items-center gap-3 mb-5 text-sm">
+  <span class="text-ink/70">Khoảng thời gian</span>
+  <input type="text" name="range" readonly data-calendar="range" value="{{ range_text }}" class="h-11 w-[272px] rounded-xl border border-ink/15 bg-white px-4 cursor-pointer">
+  <button type="submit" class="h-11 px-5 rounded-lg bg-ink text-white font-medium">Lọc dữ liệu</button>
+</form>
+
+{% if missing.missing %}
+<div class="bg-[#F6E3A5] rounded-full px-5 py-3 flex items-center justify-between text-sm mb-4">
+  <span>Dữ liệu vận hành đến {{ operating_date|dm }} · Thiếu số lượng bán: {{ missing.missing|thousands }} dòng ({{ missing.pct|floatformat:1 }}%) · Hệ thống ước tính các dòng thiếu</span>
+  <button type="button" data-act="data-missing" data-from="{{ start|dm }}" data-to="{{ end|dm }}" class="h-9 px-4 rounded-full bg-white border border-ink/10 font-medium">Xem các dòng thiếu</button>
+</div>
+{% endif %}
+
+<section class="bg-white border border-ink/10 rounded-xl overflow-hidden">
+  <table class="w-full text-sm">
+    <thead class="text-ink/70"><tr><th class="text-left font-normal px-4 py-4">Bảng</th><th class="text-right font-normal px-4">Số dòng</th><th class="text-left font-normal px-4">Phạm vi dữ liệu</th><th class="text-left font-normal px-4">Trạng thái</th><th class="text-left font-normal px-4">Ảnh hưởng</th><th></th></tr></thead>
+    <tbody class="divide-y divide-ink/10">
+      {% for g in groups %}
+      <tr>
+        <td class="px-4 py-4 font-medium">{{ g.name }}</td>
+        <td class="px-4 text-right">{{ g.rows|thousands }} dòng</td>
+        <td class="px-4 text-ink/80">{{ g.scope }}</td>
+        <td class="px-4"><span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full {% if g.status == 'Bình thường' %}bg-mint text-forest{% else %}bg-[#F6E3A5] text-[#6B4E00]{% endif %}">{% if g.status == 'Bình thường' %}✓{% else %}●{% endif %} {{ g.status }}</span></td>
+        <td class="px-4 text-ink/80">{{ g.impact }}</td>
+        <td class="px-4"><button type="button" data-act="data-open" data-name="{{ g.name }}" data-rows="{{ g.rows|thousands }} dòng" data-scope="{{ g.scope }}" data-fields="{{ g.fields }}" data-note="{{ g.note }}" data-btn="{% if g.key == 'sales' and missing.missing %}missing{% elif g.import %}import{% endif %}" data-from="{{ start|dm }}" data-to="{{ end|dm }}" class="text-ink/80 hover:text-ink">Mở</button></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <div class="flex items-center justify-between px-5 py-4 border-t border-ink/10 text-sm">
+    <span class="text-ink/70">{{ groups.start_index }}–{{ groups.end_index }} / {{ groups.paginator.count }} nhóm dữ liệu</span>
+    <div class="flex gap-2">{% for n in groups.paginator.page_range %}<a href="?range={{ range_text|urlencode }}&page={{ n }}" class="w-10 h-10 rounded-full inline-flex items-center justify-center {% if n == groups.number %}bg-ink text-white{% else %}border border-ink/20{% endif %}">{{ n }}</a>{% endfor %}</div>
+  </div>
+</section>
+{% endblock %}

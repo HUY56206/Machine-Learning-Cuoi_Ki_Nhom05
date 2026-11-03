@@ -1,0 +1,40 @@
+{% extends 'forecast/base.html' %}
+{% block title %}Cấu hình hệ thống · QSR Forecast{% endblock %}
+
+{% block content %}
+<div class="flex items-center justify-between mt-6 mb-5">
+  <h1 class="text-[28px] font-medium">Cấu hình hệ thống</h1>
+  <button type="button" data-act="cfg-save" class="h-11 px-5 rounded-full bg-ink text-white text-sm font-medium">Lưu cấu hình</button>
+</div>
+
+{% comment %}Toggle: <label class="switch"> dùng peer của Tailwind{% endcomment %}
+<div class="grid grid-cols-1 xl:grid-cols-2 gap-4 items-start text-sm">
+  <div class="flex flex-col gap-4">
+    <section class="bg-white rounded-3xl p-5">
+      <h2 class="text-base font-medium pb-2 border-b border-ink/10">Hàng dự phòng</h2>
+      <div class="flex items-center justify-between py-3 border-b border-ink/10"><span class="font-medium">Mức an toàn</span>
+        <select data-cfg="service_level" data-choice="safety" class="h-10 rounded-full border border-ink/15 bg-page px-4"><option {% if cfg.service_level == 90 %}selected{% endif %}>90% (z = 1,28)</option><option {% if cfg.service_level == 95 %}selected{% endif %}>95% (z = 1,65)</option><option {% if cfg.service_level == 99 %}selected{% endif %}>99% (z = 2,33)</option></select></div>
+      <div class="flex items-center justify-between py-3 border-b border-ink/10"><div><div class="font-medium">Cảnh báo đỏ</div><div class="text-ink/60">Thiếu hàng: Tồn hiện tại &lt; Tồn an toàn</div></div>
+        <label class="relative inline-flex cursor-pointer"><input type="checkbox" data-cfg="alert_red" {% if cfg.alert_red %}checked{% endif %} class="peer sr-only"><span class="w-12 h-7 rounded-full bg-ink/20 peer-checked:bg-ink transition"></span><span class="absolute top-0.5 left-0.5 w-6 h-6 rounded-full bg-white transition peer-checked:translate-x-5"></span></label></div>
+      <div class="flex items-center justify-between py-3"><div><div class="font-medium">Cảnh báo vàng</div><div class="text-ink/60">Cần bổ sung: Tồn ≥ tồn an toàn và cần chuẩn bị &gt; 0</div></div>
+        <label class="relative inline-flex cursor-pointer"><input type="checkbox" data-cfg="alert_yellow" {% if cfg.alert_yellow %}checked{% endif %} class="peer sr-only"><span class="w-12 h-7 rounded-full bg-ink/20 peer-checked:bg-ink transition"></span><span class="absolute top-0.5 left-0.5 w-6 h-6 rounded-full bg-white transition peer-checked:translate-x-5"></span></label></div>
+    </section>
+    <section class="bg-white rounded-3xl p-5">
+      <h2 class="text-base font-medium pb-2 border-b border-ink/10">Quy trình chuẩn bị</h2>
+      <div class="flex items-center justify-between py-3 border-b border-ink/10"><div><div class="font-medium">Điều kiện gửi bếp: Quản lý phê duyệt</div><div class="text-ink/60">Khi tắt: Gửi bếp sau khi hoàn thành tính đề xuất</div></div>
+        <button type="button" data-act="cfg-approval" aria-label="Quy trình phê duyệt bắt buộc" class="relative inline-flex"><span class="w-12 h-7 rounded-full bg-ink/50"></span><span class="absolute top-0.5 left-0.5 w-6 h-6 rounded-full bg-white translate-x-5"></span></button></div>
+      <div class="flex items-center justify-between py-3 border-b border-ink/10"><span class="font-medium">Hạn bếp hoàn thành</span>
+        <select data-cfg="prep_deadline" data-choice="deadline" class="h-10 rounded-full border border-ink/15 px-4"><option {% if cfg.prep_deadline|time:"H:i" == "09:00" %}selected{% endif %}>09:00</option><option {% if cfg.prep_deadline|time:"H:i" == "10:00" %}selected{% endif %}>10:00</option><option {% if cfg.prep_deadline|time:"H:i" == "11:00" %}selected{% endif %}>11:00</option></select></div>
+      <div class="flex items-center justify-between py-3"><span class="font-medium">Giờ nhắc kiểm kho cuối ca</span>
+        <select data-cfg="inventory_reminder" data-choice="remind" class="h-10 rounded-full border border-ink/15 px-4"><option {% if cfg.inventory_reminder|time:"H:i" == "20:00" %}selected{% endif %}>20:00</option><option {% if cfg.inventory_reminder|time:"H:i" == "21:00" %}selected{% endif %}>21:00</option><option {% if cfg.inventory_reminder|time:"H:i" == "22:00" %}selected{% endif %}>22:00</option></select></div>
+    </section>
+  </div>
+  <section class="bg-white rounded-3xl p-5">
+    <h2 class="text-base font-medium pb-2 border-b border-ink/10">Dự báo</h2>
+    <div class="flex items-center justify-between py-3 border-b border-ink/10"><span class="font-medium">Tự lập đề xuất sau khi lưu kiểm kho</span>
+      <label class="relative inline-flex cursor-pointer"><input type="checkbox" data-cfg="auto_plan_after_inventory" {% if cfg.auto_plan_after_inventory %}checked{% endif %} class="peer sr-only"><span class="w-12 h-7 rounded-full bg-ink/20 peer-checked:bg-ink transition"></span><span class="absolute top-0.5 left-0.5 w-6 h-6 rounded-full bg-white transition peer-checked:translate-x-5"></span></label></div>
+    <div class="flex items-center justify-between py-3"><span class="font-medium">Cho phép quản lý bấm "Chạy dự báo"</span>
+      <label class="relative inline-flex cursor-pointer"><input type="checkbox" data-cfg="managers_can_run" {% if cfg.managers_can_run %}checked{% endif %} class="peer sr-only"><span class="w-12 h-7 rounded-full bg-ink/20 peer-checked:bg-ink transition"></span><span class="absolute top-0.5 left-0.5 w-6 h-6 rounded-full bg-white transition peer-checked:translate-x-5"></span></label></div>
+  </section>
+</div>
+{% endblock %}

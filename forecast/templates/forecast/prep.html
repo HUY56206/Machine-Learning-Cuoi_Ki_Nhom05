@@ -1,0 +1,95 @@
+{% extends 'forecast/base.html' %}
+{% load qsr %}
+{% block title %}Chuẩn bị hàng · QSR Forecast{% endblock %}
+
+{% block content %}
+<div class="flex items-center justify-between mt-6 mb-4">
+  <h1 class="text-[28px] font-medium">Chuẩn bị hàng</h1>
+  <form method="get" id="date-form" class="flex items-center gap-3 text-sm">
+    <span class="text-ink/70">Ngày phục vụ</span>
+    <input type="text" name="date" readonly data-calendar="service" data-autosubmit value="{{ day|dm }}" class="h-11 w-[150px] rounded-full border border-ink/15 bg-white px-4 cursor-pointer">
+    <button type="button" data-act="prep-run" data-date="{{ day|dm }}" class="h-11 px-5 rounded-full border border-ink/15 bg-white font-medium flex items-center gap-2">
+      <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M6 4l14 8-14 8V4z"/></svg>Chạy dự báo
+    </button>
+  </form>
+</div>
+
+<section class="bg-white border border-ink/10 rounded-xl overflow-hidden">
+  <div class="bg-[#EEF0EC] px-4 py-3 flex items-center justify-between">
+    <div class="flex items-center gap-3 px-4 py-2 rounded-xl bg-[#FFF0C9] border border-[#F2D58A] text-[#8A5A00]">
+      <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path stroke-linecap="round" d="M12 7v5l3 2"/></svg>
+      <span>Hạn chuẩn bị</span><span class="text-xl font-bold text-ink">{{ config.prep_deadline|time:"H:i" }}</span>
+    </div>
+    <div class="flex items-center gap-3 text-sm font-medium">
+      <a href="{% url 'forecast:prep_export' %}?date={{ day|dm }}" class="h-10 px-4 rounded-full bg-white border border-ink/15 flex items-center gap-2">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v12m0 0l-4-4m4 4l4-4M4 20h16"/></svg>Tải Excel
+      </a>
+      {% if plan %}
+      <button type="button" data-act="prep-approve" data-plan="{{ plan.pk }}" data-status="{{ plan.status }}" data-date="{{ day|dm }}"
+              data-approved-at="{{ plan.approved_at|date:'d/m/Y H:i' }}" data-total="{{ plan.lines.count }}"
+              class="h-10 px-4 rounded-full bg-ink text-white flex items-center gap-2">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>{% if complete %}Hoàn thành{% elif plan.status == 'approved' %}Đã duyệt{% else %}Duyệt{% endif %}
+      </button>
+      {% endif %}
+    </div>
+  </div>
+
+  {% if not plan %}
+  <div class="px-6 py-16 text-center text-sm text-ink/60">
+    <p class="mb-2">Chưa có đề xuất chuẩn bị cho ngày {{ day|dm }}.</p>
+    <p>Nhân viên lưu kiểm kho để hệ thống tự lập đề xuất, hoặc bấm “Chạy dự báo”.</p>
+  </div>
+  {% else %}
+  <div class="flex items-center justify-between px-4 py-3 text-sm">
+    <div class="flex items-center gap-2">
+      <a href="?date={{ day|dm }}&level=all" class="h-9 px-4 rounded-full inline-flex items-center {% if level == 'all' %}bg-ink text-white font-medium{% else %}border border-ink/20{% endif %}">Tất cả <span class="ml-1 {% if level != 'all' %}text-ink/70{% endif %}">{{ counts.all }}</span></a>
+      <a href="?date={{ day|dm }}&level=short" class="h-9 px-4 rounded-full inline-flex items-center {% if level == 'short' %}bg-ink text-white font-medium{% else %}border border-ink/20{% endif %}">Thiếu hàng <span class="ml-1">{{ counts.short }}</span></a>
+      <a href="?date={{ day|dm }}&level=topup" class="h-9 px-4 rounded-full inline-flex items-center {% if level == 'topup' %}bg-ink text-white font-medium{% else %}border border-[#F2D58A] text-[#8A5A00]{% endif %}">Cần bổ sung <span class="ml-1">{{ counts.topup }}</span></a>
+      <a href="{% if counts.ok %}?date={{ day|dm }}&level=ok{% else %}#{% endif %}" {% if not counts.ok %}data-act="none-ok"{% endif %} class="h-9 px-4 rounded-full inline-flex items-center {% if level == 'ok' %}bg-ink text-white font-medium{% else %}border border-[#A7DCCB] text-forest{% endif %}">Đủ hàng <span class="ml-1">{{ counts.ok }}</span></a>
+    </div>
+    <span class="text-ink/70">Kiểm kho: {{ plan.inventory_count.user.first_name|default:"—" }} · {{ plan.inventory_count.created_at|date:"d/m/Y H:i" }}</span>
+  </div>
+
+  <table class="w-full text-sm">
+    <thead class="bg-[#EEF0EC] text-ink/70">
+      <tr>
+        <th class="text-left font-normal px-5 py-3">Món</th>
+        <th class="font-normal px-3 py-3">Dự báo</th>
+        <th class="font-normal px-3 py-3">Tồn an toàn</th>
+        <th class="font-normal px-3 py-3">Tồn hiện tại</th>
+        <th class="font-normal px-3 py-3">Cần chuẩn bị</th>
+        <th class="font-normal px-3 py-3">Trạng thái</th>
+        <th class="font-normal px-3 py-3">Lý do</th>
+      </tr>
+    </thead>
+    <tbody class="divide-y divide-ink/10 text-center">
+      {% for l in lines %}
+      <tr>
+        <td class="text-left px-5 py-4"><div>{{ l.product.menu_item_name }}</div><div class="text-xs text-ink/60">Đơn vị: {{ l.unit }}</div></td>
+        <td>{{ l.forecast_qty }}</td><td>{{ l.safety_stock }}</td><td>{{ l.current_stock }}</td>
+        <td><button type="button" {% if plan.status == 'pending' %}data-act="prep-adjust" data-line="{{ l.pk }}"{% else %}disabled{% endif %} data-name="{{ l.product.menu_item_name }}" data-unit="{{ l.unit }}" data-applied="{{ l.applied_qty }}" class="inline-block min-w-[100px] py-1.5 rounded-full border border-ink/20 {% if plan.status == 'pending' %}hover:bg-page{% endif %}">{{ l.applied_qty }}</button>
+          {% if l.applied_qty != l.need_qty %}<div class="text-xs mt-1"><span class="px-2 py-0.5 rounded bg-[#F6E3A5] text-[#6B4E00]">Đã sửa</span> <span class="text-ink/60">Đề xuất gốc {{ l.need_qty }}</span></div>{% endif %}</td>
+        <td>
+          {% if l.level == 'short' %}<span class="px-3 py-1.5 rounded-md bg-[#F6B8B8] text-[#9B1C1C]">Thiếu hàng</span>
+          {% elif l.level == 'topup' %}<span class="px-3 py-1.5 rounded-md bg-[#F6E3A5] text-[#6B4E00]">Cần bổ sung</span>
+          {% else %}<span class="px-3 py-1.5 rounded-md bg-mint text-forest">Đủ hàng</span>{% endif %}
+        </td>
+        <td><button type="button" data-act="prep-reason" data-line="{{ l.pk }}" data-name="{{ l.product.menu_item_name }}" data-unit="{{ l.unit }}" data-fc="{{ l.forecast_qty }}" data-safe="{{ l.safety_stock }}" data-cur="{{ l.current_stock }}" data-applied="{{ l.applied_qty }}" class="inline-block min-w-[80px] py-1.5 rounded-full border border-ink/20 hover:bg-page">Xem</button></td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="7" class="py-10 text-ink/60">Không có món nào trong bộ lọc này.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <div class="flex items-center justify-between px-5 py-4 border-t border-ink/10 text-sm">
+    <span class="text-ink/70">{{ lines.start_index }}–{{ lines.end_index }} / {{ lines.paginator.count }} món</span>
+    <div class="flex gap-2">
+      {% for n in lines.paginator.page_range %}
+      <a href="?date={{ day|dm }}&level={{ level }}&page={{ n }}" class="h-10 px-5 rounded-full inline-flex items-center {% if n == lines.number %}bg-ink text-white{% else %}border border-ink/20{% endif %}">Trang {{ n }}</a>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+</section>
+{% endblock %}

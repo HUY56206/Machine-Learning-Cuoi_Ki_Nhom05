@@ -1,0 +1,179 @@
+{% extends 'forecast/base.html' %}
+{% load qsr %}
+{% block title %}Kiểm kho · QSR Forecast{% endblock %}
+
+{% block content %}
+<h1 class="text-[28px] font-medium mt-6 mb-3">Kiểm kho</h1>
+<p class="text-xs mb-4">1 ly = nguyên liệu cho 1 ly (cốc + siro)</p>
+
+<form method="get" data-submit="view-inventory" class="flex items-center gap-3 mb-4 text-sm">
+  <span class="text-ink/70">Ngày kiểm kho</span>
+  <input type="text" name="date" readonly data-calendar="inventory" value="{{ day|dm }}" class="h-11 w-[274px] rounded-xl border border-ink/15 bg-white px-4 cursor-pointer">
+  <button type="submit" class="h-11 px-5 rounded-lg bg-ink text-white font-medium">Xem kiểm kho</button>
+</form>
+
+{% if readonly %}
+<p class="mb-4 rounded-lg bg-[#F6E3A5] px-4 py-3 text-sm">Chỉ nhập kiểm kho cho ngày vận hành hiện tại ({{ operating_date|dm }}). Ngày này chỉ để xem.</p>
+{% endif %}
+
+<section class="bg-white border border-ink/10 rounded-xl px-5 py-4 flex items-center gap-5 text-sm mb-4">
+  <span>Tiến độ kiểm kho</span>
+  <div class="flex-1 max-w-[380px] h-2 rounded-full bg-ink/10 overflow-hidden"><div id="p-bar" class="h-full bg-forest" style="width:0%"></div></div>
+  <span><b id="p-done" class="font-normal">0</b> Đã nhập</span><span><b id="p-review" class="font-normal">0</b> Cần xem lại</span><span><b id="p-missing" class="font-normal">0</b> Chưa nhập</span>
+  <span id="p-entered" class="ml-2 font-medium">0</span><span class="text-ink/70">/{{ rows|length }} món đã nhập</span>
+</section>
+
+<div class="grid grid-cols-1 xl:grid-cols-[190px_1fr_270px] gap-4 items-start text-sm">
+  <nav class="bg-white rounded-3xl p-2.5 flex flex-col gap-1">
+    {% for g in groups %}
+    <button type="button" data-cat-tab="{{ g.key }}" data-total="{{ g.total }}" class="flex justify-between px-3 py-3 rounded-xl text-left"><span>{{ g.label }}</span><span data-cat-count></span></button>
+    {% endfor %}
+  </nav>
+
+  <section class="bg-white border border-ink/10 rounded-xl overflow-hidden">
+    <div id="cat-title" class="px-5 py-4 font-medium"></div>
+    <table class="w-full">
+      <thead class="bg-page text-ink/70"><tr><th class="text-left font-normal px-5 py-3">Món</th><th class="font-normal">Tồn kỳ trước</th><th class="font-normal">Số lượng còn lại</th><th class="text-left font-normal px-3">Trạng thái</th></tr></thead>
+      <tbody class="divide-y divide-ink/10 text-center">
+        {% for r in rows %}
+        <tr data-row data-id="{{ r.id }}" data-cat="{{ r.category }}" data-prev="{{ r.prev|default_if_none:'' }}" data-orig="{{ r.cur|default_if_none:'' }}" hidden>
+          <td class="text-left px-5 py-3"><div class="font-medium">{{ r.name }}</div><div class="text-ink/60">{{ r.unit }}</div></td>
+          <td class="text-ink/70">{{ r.prev|default_if_none:"—" }}</td>
+          <td>
+            <div class="inline-flex items-center gap-2">
+              <button type="button" data-step="-1" {% if readonly %}disabled{% endif %} class="w-8 h-8 rounded-full border border-ink/25">−</button>
+              <input type="number" min="0" value="{{ r.cur|default_if_none:'' }}" {% if readonly %}disabled{% endif %} class="w-[66px] h-10 text-center rounded-md border border-ink/20">
+              <button type="button" data-step="1" {% if readonly %}disabled{% endif %} class="w-8 h-8 rounded-full border border-ink/25">+</button>
+            </div>
+          </td>
+          <td class="text-left px-3"><span data-status></span></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <div class="flex items-center justify-between px-5 py-4 border-t border-ink/10">
+      <span id="pager-info" class="text-ink/70"></span>
+      <div id="pager" class="flex gap-2"></div>
+    </div>
+  </section>
+
+  <aside class="bg-white rounded-3xl p-5">
+    <h3 class="font-medium pb-2 border-b border-ink/10">Lịch sử kiểm kho</h3>
+    <ul class="divide-y divide-ink/10">
+      {% for h in history %}<li class="flex justify-between py-3"><span>{{ h.at|date:"d/m/Y H:i" }}<br>{{ h.user }}</span><span class="self-center">{{ h.entered }}/{{ rows|length }} món</span></li>
+      {% empty %}<li class="py-3 text-ink/60">Chưa có lần kiểm kho nào.</li>{% endfor %}
+    </ul>
+  </aside>
+</div>
+
+{% if not readonly %}
+<section class="bg-white border border-ink/10 rounded-xl px-5 py-4 mt-4 flex items-center justify-between text-sm">
+  <div class="flex items-center gap-3"><i class="w-2.5 h-2.5 rounded-full bg-[#E0A100]"></i><b id="f-changes" class="font-medium"></b><span id="f-review" class="text-ink/70"></span></div>
+  <div class="flex items-center gap-3 font-medium">
+    <button type="button" data-act="inv-cancel" class="h-11 px-5 rounded-full border border-ink/25">Huỷ</button>
+    <button type="button" data-act="inv-save-draft" class="h-11 px-5 rounded-full border border-ink/25">Lưu nháp</button>
+    <button type="button" data-act="inv-save" class="h-12 px-6 rounded-full bg-ink text-white">✓ Lưu &amp; tính lại đề xuất</button>
+  </div>
+</section>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+  /* Kiểm kho: số còn lại < 25% tồn kỳ trước => "Cần xem lại"; ô trống => chưa nhập. Lưu qua API. */
+  (function () {
+    var PAGE = 5;
+    var rows = Array.prototype.slice.call(document.querySelectorAll('[data-row]'));
+    var tabs = Array.prototype.slice.call(document.querySelectorAll('[data-cat-tab]'));
+    var cat = tabs[0].getAttribute('data-cat-tab'), page = 1;
+    var OK = '<span class="px-3 py-1.5 rounded-full bg-mint text-forest">✓ Đã nhập</span>';
+    var REVIEW = '<span class="px-3 py-1.5 rounded-full bg-[#F6E3A5] text-[#6B4E00]">● Cần xem lại</span>';
+    var EMPTY = '<span class="px-3 py-1.5 rounded-full bg-[#E5E7E3] text-ink/60">Chưa nhập</span>';
+
+    function info(r) {
+      var v = r.querySelector('input').value, prev = r.getAttribute('data-prev');
+      return { row: r, inp: r.querySelector('input'), id: r.getAttribute('data-id'), cat: r.getAttribute('data-cat'),
+               cur: v === '' ? null : +v, prev: prev === '' ? null : +prev, changed: v !== r.getAttribute('data-orig'),
+               name: r.querySelector('.font-medium').textContent };
+    }
+    function isReview(i) { return i.cur !== null && i.prev && i.cur < i.prev * 0.25; }
+
+    function refresh() {
+      var list = rows.map(info), review = list.filter(isReview), changes = list.filter(function (i) { return i.changed; });
+      var missing = list.filter(function (i) { return i.cur === null; }).length, entered = list.length - missing;
+      list.forEach(function (i) {
+        i.inp.className = 'w-[66px] h-10 text-center rounded-md border ' + (isReview(i) ? 'border-[#E5484D] bg-[#FDE3E3] text-[#9B1C1C]' : 'border-ink/20');
+        i.row.querySelector('[data-status]').innerHTML = i.cur === null ? EMPTY : isReview(i) ? REVIEW : OK;
+      });
+      tabs.forEach(function (t) {
+        var key = t.getAttribute('data-cat-tab'), items = list.filter(function (i) { return i.cat === key; });
+        var done = items.filter(function (i) { return i.cur !== null; }).length, active = key === cat;
+        t.className = 'flex justify-between px-3 py-3 rounded-xl text-left ' + (active ? 'bg-[#DDF2EA] font-medium text-forest' : '');
+        t.querySelector('[data-cat-count]').textContent = (done === items.length && !active ? '✓ ' : '') + done + '/' + items.length;
+      });
+      var f = document.getElementById('f-changes');
+      if (f) {
+        f.textContent = changes.length ? 'Có ' + changes.length + ' thay đổi chưa lưu' : 'Chưa có thay đổi';
+        document.getElementById('f-review').textContent = review.length ? '· ' + review.map(function (i) { return i.name; }).join(', ') + ' cần xem lại' : '';
+      }
+      document.getElementById('p-bar').style.width = Math.round(entered / list.length * 100) + '%';
+      document.getElementById('p-done').textContent = entered - review.length;
+      document.getElementById('p-review').textContent = review.length;
+      document.getElementById('p-missing').textContent = missing;
+      document.getElementById('p-entered').textContent = entered;
+    }
+
+    function render() {
+      var inCat = rows.filter(function (r) { return r.getAttribute('data-cat') === cat; });
+      var pages = Math.max(1, Math.ceil(inCat.length / PAGE));
+      page = Math.min(page, pages);
+      rows.forEach(function (r) { r.hidden = true; });
+      inCat.slice((page - 1) * PAGE, page * PAGE).forEach(function (r) { r.hidden = false; });
+      var tab = tabs.filter(function (t) { return t.getAttribute('data-cat-tab') === cat; })[0];
+      document.getElementById('cat-title').textContent = tab.querySelector('span').textContent + ' · ' + inCat.filter(function (r) { return r.querySelector('input').value !== ''; }).length + '/' + inCat.length + ' món';
+      document.getElementById('pager-info').textContent = ((page - 1) * PAGE + 1) + '–' + Math.min(page * PAGE, inCat.length) + ' / ' + inCat.length + ' món';
+      var pager = document.getElementById('pager');
+      pager.innerHTML = '';
+      for (var n = 1; n <= pages; n++) {
+        (function (n) {
+          var b = document.createElement('button');
+          b.type = 'button'; b.textContent = n;
+          b.className = 'w-10 h-10 rounded-full ' + (n === page ? 'bg-ink text-white' : 'border border-ink/20');
+          b.onclick = function () { page = n; render(); };
+          pager.appendChild(b);
+        })(n);
+      }
+      refresh();
+    }
+
+    tabs.forEach(function (t) { t.addEventListener('click', function () { cat = t.getAttribute('data-cat-tab'); page = 1; render(); }); });
+    rows.forEach(function (r) {
+      var inp = r.querySelector('input');
+      inp.addEventListener('input', render);
+      r.querySelectorAll('[data-step]').forEach(function (b) {
+        b.addEventListener('click', function () {
+          inp.value = Math.max(0, (+inp.value || 0) + (+b.getAttribute('data-step')));
+          render();
+        });
+      });
+    });
+
+    window.QSR_INV = {
+      status: function () {
+        var list = rows.map(info);
+        var q = {};
+        list.forEach(function (i) { q[i.id] = i.cur; });
+        return { missing: list.filter(function (i) { return i.cur === null; }).length,
+                 entered: list.filter(function (i) { return i.cur !== null; }).length, total: list.length,
+                 review: list.filter(isReview).map(function (i) { return { name: i.name, cur: i.cur, prev: i.prev }; }),
+                 quantities: q, firstMissingCat: (list.filter(function (i) { return i.cur === null; })[0] || {}).cat };
+      },
+      focusMissing: function () {
+        var s = window.QSR_INV.status();
+        if (s.firstMissingCat) { cat = s.firstMissingCat; page = 1; render(); }
+      }
+    };
+    render();
+  })();
+</script>
+{% endblock %}

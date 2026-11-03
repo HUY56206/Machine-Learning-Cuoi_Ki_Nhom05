@@ -1,0 +1,56 @@
+{% extends 'forecast/base.html' %}
+{% block title %}Tài khoản · QSR Forecast{% endblock %}
+
+{% block content %}
+<div class="flex items-center justify-between mt-6 mb-5">
+  <h1 class="text-[28px] font-medium">Tài khoản</h1>
+  <button type="button" data-act="acct-form" class="h-11 px-5 rounded-full bg-ink text-white text-sm font-medium">+ Thêm tài khoản</button>
+</div>
+
+<section class="bg-white border border-ink/10 rounded-xl overflow-hidden">
+  <div class="flex items-center gap-2 p-4 text-sm">
+    <div class="relative"><input id="acct-q" type="search" readonly data-act="acct-search" placeholder="Tìm tên hoặc tài khoản" class="h-10 w-[254px] rounded-full border border-ink/15 pl-10 pr-4 cursor-pointer">
+      <svg class="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-ink/60" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg></div>
+    <button data-role-filter="" class="h-9 px-4 rounded-full bg-ink text-white font-medium">Tất cả {{ total }}</button>
+    {% for label, n in counts.items %}<button data-role-filter="{{ label }}" class="h-9 px-4 rounded-full border border-ink/20 text-ink/80">{{ label }} {{ n }}</button>{% endfor %}
+  </div>
+  <table class="w-full text-sm">
+    <thead class="bg-page text-ink/70"><tr>
+      <th class="text-left font-normal px-4 py-3">Tên</th><th class="text-left font-normal px-4">Tên đăng nhập</th><th class="text-left font-normal px-4">Vai trò</th><th class="text-left font-normal px-4">Phạm vi</th><th class="text-left font-normal px-4">Thao tác</th></tr></thead>
+    <tbody class="divide-y divide-ink/10">
+      {% for r in rows %}
+      <tr data-acct-row data-user="{{ r.username }}" data-role="{{ r.role }}" class="{% if not r.active %}opacity-50{% endif %}">
+        <td class="px-4 py-4 font-medium">{{ r.name }}{% if not r.active %} <span class="ml-1 text-xs font-normal text-ink/60">Ngừng hoạt động</span>{% endif %}</td>
+        <td class="px-4 text-ink/70">{{ r.username }}</td><td class="px-4">{{ r.role }}</td><td class="px-4 text-ink/70">{{ r.scope }}</td>
+        <td class="px-4"><button data-act="acct-form" data-name="{{ r.name }}" data-user="{{ r.username }}" data-role="{{ r.role }}" data-scope="{{ r.scope }}" class="mr-4 hover:underline">Sửa</button>
+          {% if r.active %}<button data-act="acct-disable" data-user="{{ r.username }}" aria-label="Vô hiệu hóa" class="align-middle"><svg class="inline w-5 h-5 text-[#E5484D]" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2 20c0-3.5 3-6 7-6s7 2.5 7 6M4 4l16 16"/></svg></button>{% endif %}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endblock %}
+
+{% block scripts %}{{ scope_choices|json_script:"scope-choices" }}
+<script>
+  window.QSR_DATA = { scopes: JSON.parse(document.getElementById('scope-choices').textContent) };
+  /* Lọc danh sách theo vai trò (chip) và từ khóa (popup "Tìm tài khoản"). */
+  (function () {
+    var rows = Array.prototype.slice.call(document.querySelectorAll('[data-acct-row]'));
+    var chips = Array.prototype.slice.call(document.querySelectorAll('[data-role-filter]'));
+    var q = document.getElementById('acct-q'), role = '';
+    function apply() {
+      var t = q.value.trim().toLowerCase();
+      rows.forEach(function (r) {
+        r.hidden = !((!role || r.getAttribute('data-role') === role) && (!t || r.textContent.toLowerCase().indexOf(t) > -1));
+      });
+    }
+    chips.forEach(function (c) {
+      c.addEventListener('click', function () {
+        role = c.getAttribute('data-role-filter');
+        chips.forEach(function (x) { x.className = 'h-9 px-4 rounded-full ' + (x === c ? 'bg-ink text-white font-medium' : 'border border-ink/20 text-ink/80'); });
+        apply();
+      });
+    });
+    q.addEventListener('input', apply);
+  })();
+</script>{% endblock %}

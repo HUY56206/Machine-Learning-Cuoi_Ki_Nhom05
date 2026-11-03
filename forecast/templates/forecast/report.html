@@ -1,0 +1,106 @@
+{% extends 'forecast/base.html' %}
+{% load qsr %}
+{% block title %}Báo cáo bán hàng · QSR Forecast{% endblock %}
+
+{% block content %}
+<div class="flex items-center justify-between mt-6 mb-5">
+  <h1 class="text-[28px] font-medium">Báo cáo bán hàng</h1>
+  <div class="flex gap-2 text-sm font-medium">
+    <a href="?tab=trend&period={{ period|urlencode }}" class="h-10 px-5 rounded-full inline-flex items-center {% if tab == 'trend' %}bg-ink text-white{% else %}border border-ink/20 bg-white{% endif %}">Xu hướng bán hàng</a>
+    <a href="?tab=accuracy&period={{ period|urlencode }}" class="h-10 px-5 rounded-full inline-flex items-center {% if tab == 'accuracy' %}bg-ink text-white{% else %}border border-ink/20 bg-white{% endif %}">Độ chính xác dự báo</a>
+  </div>
+</div>
+
+<form method="get" data-submit="view-report" class="flex flex-wrap items-end gap-4 mb-5 text-sm">
+  <input type="hidden" name="tab" value="{{ tab }}">
+  <div class="w-[360px]">
+    <label class="block text-ink/70 mb-1.5">Cửa hàng</label>
+    <div data-act="store-scope" class="h-11 rounded-xl border border-ink/15 bg-white px-4 flex items-center justify-between cursor-pointer">{{ store.pk }} · {{ store.restaurant_name }}
+      <svg class="w-4 h-4 text-ink/70" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 018 0v4"/></svg>
+    </div>
+  </div>
+  <div class="w-[350px]">
+    <label class="block text-ink/70 mb-1.5">Khoảng thời gian</label>
+    <select name="period" data-choice="period" class="w-full h-11 rounded-xl border border-ink/15 bg-white px-4">
+      {% for p in periods %}<option {% if p == period %}selected{% endif %}>{{ p }}</option>{% endfor %}
+    </select>
+  </div>
+  <button type="submit" class="h-11 px-5 rounded-lg bg-ink text-white font-medium">Xem báo cáo</button>
+</form>
+
+{% if not has_data %}
+<section class="bg-white border border-ink/10 rounded-xl px-6 py-16 text-center text-sm text-ink/60">
+  <p class="text-lg font-medium text-ink/70 mb-1">Chưa đủ dữ liệu để đối chiếu</p>
+  Chưa có số bán thực tế trong kỳ {{ period }}. Chọn kỳ đối chiếu khác ở ô Khoảng thời gian.
+</section>
+{% elif tab == 'accuracy' %}
+<section class="bg-white border border-ink/10 rounded-xl p-5">
+  {% if acc_error %}<p class="text-sm text-[#9B1C1C]">Không tính được độ chính xác: {{ acc_error }}</p>
+  {% elif not acc %}<p class="text-lg text-ink/60 font-medium">Chưa đủ dữ liệu để đối chiếu</p><p class="text-sm text-ink/60 mt-1">Cần có số bán thực tế và dự báo của cùng món, cửa hàng và ngày.</p>
+  {% else %}
+  <p class="text-sm mb-3">{{ store.pk }} · Kỳ đối chiếu: {{ acc.start|dm }} – {{ acc.end|dm }}</p>
+  <div class="text-base">Sai số trung bình {{ acc.avg|floatformat:1 }}%</div>
+  <div class="text-xs text-ink/70 mb-3">Sai số theo món, gộp theo ngày · càng thấp càng tốt</div>
+  <div class="flex gap-3 items-end h-[160px]">{% for b in acc.bars %}<div class="flex-1 text-center text-xs"><div class="mb-1">{{ b.value|floatformat:1 }}%</div><div class="mx-auto w-9 rounded bg-ink" style="height:{{ b.height }}px"></div><div class="mt-2">{{ b.label }}</div></div>{% endfor %}</div>
+  <p class="text-xs mt-3">Ngày phục vụ hiện tại chưa có số bán thực tế nên chưa đánh giá sai số.</p>
+  {% endif %}
+</section>
+{% else %}
+<section class="grid grid-cols-3 gap-4 mb-4">
+  <div class="bg-white border border-ink/10 rounded-lg p-4"><div><span class="text-3xl font-bold">{{ best_month.1|floatformat:1 }}</span> <span class="text-sm text-ink/70">phần/món/ngày</span></div><div class="text-sm text-ink/70 mt-2">Cao nhất theo tháng · Tháng {{ best_month.0 }}</div></div>
+  <div class="bg-white border border-ink/10 rounded-lg p-4"><div><span class="text-3xl font-bold">{{ best_dow.1|floatformat:1 }}</span> <span class="text-sm text-ink/70">phần/món/ngày</span></div><div class="text-sm text-ink/70 mt-2">Cao nhất theo thứ · {{ best_dow.0 }}</div></div>
+  <div class="bg-white border border-ink/10 rounded-lg p-4"><div class="text-3xl font-bold">{% if event_lift is None %}—{% else %}≈ {% if event_lift > 0 %}+{% endif %}{{ event_lift }}%{% endif %}</div><div class="text-sm text-ink/70 mt-2">Chênh lệch theo sự kiện</div></div>
+</section>
+
+<section class="grid grid-cols-1 xl:grid-cols-[1fr_400px] gap-4 mb-4">
+  <div class="bg-white border border-ink/10 rounded-lg p-5">
+    <div class="flex justify-between items-start">
+      <h2 class="font-medium">Doanh thu theo tháng (USD)</h2>
+      <div class="text-right"><div class="text-3xl font-bold">${{ total_rev|thousands }}</div><div class="text-sm text-ink/60">{{ total_qty|thousands }} phần đã bán</div></div>
+    </div>
+    <div class="flex gap-4 items-end h-[190px] mt-4 text-center text-xs">
+      {% for b in rev_bars %}
+      <div class="flex-1"><div class="mb-1">${{ b.value }}k</div><div class="mx-auto w-9 {% if b.top %}bg-[#2D3B2B]{% else %}bg-ink{% endif %}" style="height:{{ b.height }}px"></div><div class="mt-2 text-sm text-ink/70">{{ b.label }}</div></div>
+      {% endfor %}
+    </div>
+  </div>
+  <div class="bg-white border border-ink/10 rounded-lg p-5 self-start">
+    <h2 class="font-medium mb-3">Món có doanh thu cao nhất</h2>
+    <ul class="text-sm divide-y divide-ink/10">
+      {% for t in top_items %}<li class="flex justify-between py-3.5"><span>{{ t.product__menu_item_name }}</span><span class="font-medium">${{ t.r|thousands }}</span></li>{% endfor %}
+    </ul>
+  </div>
+</section>
+
+<section class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
+  <div class="bg-white border border-ink/10 rounded-lg p-5">
+    <h2 class="font-medium mb-4">Theo tháng · 01/2021–{{ history_end|dm:"%m/%Y" }} (phần/món/ngày)</h2>
+    <div class="flex gap-2 items-end h-[160px] text-center text-xs">
+      {% for b in months %}<div class="flex-1"><div class="{% if b.top %}text-forest{% endif %}">{{ b.value|floatformat:1 }}</div><div class="mx-auto w-7 {% if b.top %}bg-ink{% else %}bg-mint{% endif %}" style="height:{{ b.height }}px"></div><div class="mt-2 text-ink/70">{{ b.label }}</div></div>{% endfor %}
+    </div>
+  </div>
+  <div class="bg-white border border-ink/10 rounded-lg p-5">
+    <h2 class="font-medium mb-4">Theo thứ · 01/2021–{{ history_end|dm:"%m/%Y" }} (phần/món/ngày)</h2>
+    <div class="flex gap-4 items-end h-[160px] text-center text-xs">
+      {% for b in weekdays %}<div class="flex-1"><div class="{% if b.top %}text-forest{% endif %}">{{ b.value|floatformat:1 }}</div><div class="mx-auto w-9 {% if b.top %}bg-ink{% else %}bg-mint{% endif %}" style="height:{{ b.height }}px"></div><div class="mt-2 text-ink/70">{{ b.label }}</div></div>{% endfor %}
+    </div>
+  </div>
+</section>
+
+<section class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+  <div class="bg-white border border-ink/10 rounded-lg p-5">
+    <h2 class="font-medium mb-3">Chênh lệch theo yếu tố</h2>
+    <ul class="text-sm divide-y divide-ink/10">
+      {% for e in effects %}<li class="flex justify-between py-2.5"><span>{{ e.label }}</span><span class="font-medium">{% if e.pct is None %}—{% else %}{% if e.pct > 0 %}+{% endif %}{{ e.pct }}%{% endif %}</span></li>{% endfor %}
+    </ul>
+  </div>
+  <div class="bg-white border border-ink/10 rounded-lg p-5">
+    <h2 class="font-medium mb-3">Lượng bán theo món</h2>
+    <p class="text-xs text-ink/60 mb-1">Bán chạy nhất</p>
+    <ul class="text-sm mb-3">{% for t in best_items %}<li class="flex justify-between py-1.5"><span>{{ t.product__menu_item_name }}</span><span class="font-medium">{{ t.q|thousands }}</span></li>{% endfor %}</ul>
+    <p class="text-xs text-ink/60 mb-1">Bán chậm nhất</p>
+    <ul class="text-sm">{% for t in worst_items %}<li class="flex justify-between py-1.5"><span>{{ t.product__menu_item_name }}</span><span class="font-medium">{{ t.q|thousands }}</span></li>{% endfor %}</ul>
+  </div>
+</section>
+{% endif %}
+{% endblock %}

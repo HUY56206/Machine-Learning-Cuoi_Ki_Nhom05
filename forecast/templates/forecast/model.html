@@ -1,0 +1,61 @@
+{% extends 'forecast/base.html' %}
+{% load qsr %}
+{% block title %}Dự báo &amp; Mô hình · QSR Forecast{% endblock %}
+
+{% block content %}
+<h1 class="text-[28px] font-medium mt-6 mb-5">Dự báo &amp; Mô hình</h1>
+
+<section class="bg-white border border-ink/10 rounded-xl p-5 mb-4 text-sm leading-7">
+  <h2 class="text-lg font-medium mb-1">Thông tin mô hình</h2>
+  <p>{{ info.name|title }} · {{ info.file }} · Huấn luyện đến {{ info.trained_until|slice:"8:10" }}/{{ info.trained_until|slice:"5:7" }}/{{ info.trained_until|slice:":4" }}</p>
+  <p class="text-xs">Đánh giá ngoại tuyến · 15 cửa hàng · {{ info.test_range }}</p>
+  {% if info.wmape %}<p>wMAPE: {{ info.wmape|floatformat:1 }}% · Seasonal Naive: {{ info.naive|floatformat:1 }}% · Giảm sai số khoảng {{ info.gain|floatformat:1 }}%</p>{% endif %}
+  <p class="text-xs">Kết quả tập test phục vụ báo cáo nghiên cứu; dữ liệu vận hành demo chỉ đến {{ operating_date|dm }}.</p>
+</section>
+
+<section class="bg-white rounded-3xl p-5 mb-4 text-sm">
+  <h2 class="text-lg font-medium mb-3">Chạy dự báo</h2>
+  <div class="flex items-end gap-3">
+    <div class="flex-1"><label class="block text-ink/70 mb-1.5">Cửa hàng</label>
+      <select id="run-store" data-choice="runstore" class="w-full h-11 rounded-full border border-ink/15 px-4">{% for c in store_choices %}<option {% if c|slice:":3" == selected.pk|add:" · " %}selected{% endif %}>{{ c }}</option>{% endfor %}</select></div>
+    <div class="flex-1"><label class="block text-ink/70 mb-1.5">Ngày dự báo</label>
+      <select class="w-full h-11 rounded-full border border-ink/15 px-4"><option>{{ service_date|dm }}</option></select></div>
+    <button type="button" data-act="model-run" class="h-11 px-6 rounded-full bg-ink text-white font-medium flex items-center gap-2"><svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M6 4l14 8-14 8V4z"/></svg>Chạy dự báo</button>
+  </div>
+</section>
+
+<section class="bg-white rounded-3xl p-5 mb-4 text-sm">
+  <h2 class="text-base font-medium mb-3">Số bán thật và dự báo · {{ selected.pk }} · {{ selected.restaurant_name }}</h2>
+  <div class="flex gap-2 items-end h-[160px] text-center text-xs">
+    {% for b in bars %}<div class="flex-1"><div>{{ b.value|thousands }}</div><div class="mx-auto w-7 rounded-sm {% if b.forecast %}bg-forest{% else %}bg-sage{% endif %}" style="height:{{ b.height }}px"></div><div class="mt-2 text-ink/70">{{ b.label|dm:"%d/%m" }}</div></div>{% empty %}<p class="text-ink/60">Chưa có số liệu.</p>{% endfor %}
+  </div>
+  <p class="text-xs text-ink/60 mt-3">Thực tế đến {{ operating_date|dm:"%d/%m" }}; ngày {{ service_date|dm:"%d/%m" }} chỉ có dự báo.</p>
+</section>
+
+<section class="bg-white rounded-3xl p-5 text-sm">
+  <div class="flex justify-end gap-3 mb-4">
+    <form method="get"><select name="sort" onchange="this.form.submit()" class="h-11 rounded-full border border-ink/15 px-4"><option value="priority" {% if sort == 'priority' %}selected{% endif %}>Sắp xếp: Cần xử lý trước</option><option value="code" {% if sort == 'code' %}selected{% endif %}>Sắp xếp: Mã cửa hàng</option></select></form>
+    <button type="button" data-act="model-run-all" class="h-11 px-5 rounded-full border border-ink/15 font-medium">Chạy cho tất cả cửa hàng</button>
+  </div>
+  <div class="border border-ink/10 rounded-lg overflow-hidden">
+    <table class="w-full">
+      <thead class="bg-page text-ink/70"><tr><th class="text-left font-normal px-4 py-3">Cửa hàng</th><th class="text-left font-normal px-4">Kiểm kho {{ operating_date|dm:"%d/%m/%Y" }}</th><th class="text-left font-normal px-4">Dự báo {{ service_date|dm:"%d/%m/%Y" }}</th><th class="text-left font-normal px-4">Đề xuất chuẩn bị</th><th></th></tr></thead>
+      <tbody class="divide-y divide-ink/10">
+        {% for r in rows %}
+        <tr>
+          <td class="px-4 py-4 font-medium"><a href="?store={{ r.store.pk }}&sort={{ sort }}">{{ r.store.pk }} · {{ r.store.restaurant_name }}</a></td>
+          <td class="px-4 {% if not r.inventory %}text-ink/60{% else %}text-ink/70{% endif %}">{% if r.inventory %}{{ r.inventory.user.first_name|default:r.inventory.user.username }} · {{ r.inventory.created_at|date:"d/m/Y H:i" }}{% else %}Chưa có dữ liệu{% endif %}</td>
+          <td class="px-4 {% if not r.plan %}text-ink/60{% else %}text-ink/70{% endif %}">{% if r.plan %}{{ r.plan.created_at|date:"d/m/Y H:i" }}{% else %}Chưa chạy{% endif %}</td>
+          <td class="px-4"><span class="px-3 py-1 rounded-full {% if r.label == 'Chờ duyệt' or r.label == 'Chưa gán quản lý' %}bg-[#F6E3A5] text-[#6B4E00]{% elif r.label == 'Đã duyệt' %}bg-mint text-forest{% else %}bg-[#E5E7E3] text-ink/60{% endif %}">{{ r.label }}</span></td>
+          <td class="px-4"><button data-act="model-run" data-store="{{ r.store.pk }} · {{ r.store.restaurant_name }}" class="h-9 px-4 rounded-full border border-ink/20">Chạy</button></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div class="flex justify-end gap-2 mt-3">{% for n in rows.paginator.page_range %}<a href="?page={{ n }}&sort={{ sort }}&store={{ selected.pk }}" class="w-10 h-10 rounded-full inline-flex items-center justify-center {% if n == rows.number %}bg-ink text-white{% else %}border border-ink/20{% endif %}">{{ n }}</a>{% endfor %}</div>
+</section>
+{% endblock %}
+
+{% block scripts %}{{ store_choices|json_script:"store-choices" }}
+<script>window.QSR_DATA = { stores: JSON.parse(document.getElementById('store-choices').textContent) };</script>{% endblock %}
