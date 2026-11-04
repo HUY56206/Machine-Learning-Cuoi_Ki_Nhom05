@@ -1,3 +1,0 @@
-# mysqlclient cần thư viện C và công cụ biên dịch khi pip cài (lỗi "Getting requirements to build wheel")
-[phases.setup]
-aptPkgs = ["default-libmysqlclient-dev", "pkg-config", "build-essential"]

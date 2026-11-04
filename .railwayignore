@@ -1,8 +1,0 @@
-data/
-Slides/
-popup/
-muctieu/
-Assets/figures/
-Assets/catboost_info/
-db.sqlite3
-.venv/

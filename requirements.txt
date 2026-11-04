@@ -2,8 +2,6 @@
 asgiref==3.12.1
 Django==6.1.2
 sqlparse==0.6.0
-gunicorn==23.0.0
-whitenoise==6.9.0
 
 # Dữ liệu & ML (đã kiểm thử với Python 3.12)
 pandas==3.1.0

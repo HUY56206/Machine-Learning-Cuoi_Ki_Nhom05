@@ -1,7 +1,7 @@
 """Tạo dữ liệu mẫu để chạy thử web: cấu hình, tài khoản theo thiết kế, lịch sử kiểm kho và một đề xuất chờ duyệt.
 
-    python manage.py seed_demo            # mật khẩu mặc định in ra màn hình
-    python manage.py seed_demo --password "MatKhauCuaBan" --no-plan
+    python manage.py seed_demo            # tạo tài khoản cho toàn bộ 15 cửa hàng (mật khẩu riêng từng tài khoản)
+    python manage.py seed_demo --no-plan  # không chạy dự báo mẫu
 Chạy lại được nhiều lần (idempotent).
 """
 import random
@@ -15,14 +15,39 @@ from django.utils import timezone
 from forecast.models import (DailySale, InventoryCount, InventoryItem, PrepPlan, Product, Profile, Role, Store, SystemConfig)
 from forecast.services import adminops, plans
 
-DEMO_PASSWORD = 'Qsr@2025!'
-USERS = [
-    # username, tên hiển thị, vai trò, cửa hàng
-    ('lan.r01', 'Quản lý R01', Role.MANAGER, 'R01'),
-    ('minh.r01', 'Nhân viên R01', Role.STAFF, 'R01'),
-    ('hung.r02', 'Quản lý R02', Role.MANAGER, 'R02'),
-    ('mai.r02', 'Nhân viên R02', Role.STAFF, 'R02'),
-    ('admin', 'Quản trị viên', Role.ADMIN, None),
+ACCOUNTS = [
+    # (tên đăng nhập, mật khẩu, tên hiển thị, vai trò, cửa hàng) – sinh ngẫu nhiên một lần, mỗi tài khoản khác nhau
+    ('lan.r01', 'vjtSKDEP%96', 'Quản lý R01', Role.MANAGER, 'R01'),
+    ('khanh.r01', 'UTxmJhkV!40', 'Nhân viên R01', Role.STAFF, 'R01'),
+    ('trang.r02', '7AXSTTwM!86', 'Quản lý R02', Role.MANAGER, 'R02'),
+    ('nam.r02', 'ukYcs7PR#17', 'Nhân viên R02', Role.STAFF, 'R02'),
+    ('yen.r03', 'jSS6k2tD%62', 'Quản lý R03', Role.MANAGER, 'R03'),
+    ('tuan.r03', '52NVaJcu$51', 'Nhân viên R03', Role.STAFF, 'R03'),
+    ('chi.r04', 'QabyMfhC%65', 'Quản lý R04', Role.MANAGER, 'R04'),
+    ('kien.r04', '4W7xd3t3$66', 'Nhân viên R04', Role.STAFF, 'R04'),
+    ('huong.r05', 'nS722UFE#91', 'Quản lý R05', Role.MANAGER, 'R05'),
+    ('thao.r05', 'y6FHPP7w$63', 'Nhân viên R05', Role.STAFF, 'R05'),
+    ('loan.r06', 'b9nNE2TG!21', 'Quản lý R06', Role.MANAGER, 'R06'),
+    ('hanh.r06', '8bAfs2nm@74', 'Nhân viên R06', Role.STAFF, 'R06'),
+    ('khoa.r07', 'TY6k93Dz@85', 'Quản lý R07', Role.MANAGER, 'R07'),
+    ('phong.r07', 'bt5sb78Q%43', 'Nhân viên R07', Role.STAFF, 'R07'),
+    ('nhung.r08', 'psRm3uZr@29', 'Quản lý R08', Role.MANAGER, 'R08'),
+    ('tam.r08', 'DXekXKb8!65', 'Nhân viên R08', Role.STAFF, 'R08'),
+    ('son.r09', 'aRgV4ayV$67', 'Quản lý R09', Role.MANAGER, 'R09'),
+    ('duc.r09', 'fKu4bMgf#54', 'Nhân viên R09', Role.STAFF, 'R09'),
+    ('quan.r10', 'Mw7U87Ge#21', 'Quản lý R10', Role.MANAGER, 'R10'),
+    ('quyen.r10', 'Nz2HD8fK!81', 'Nhân viên R10', Role.STAFF, 'R10'),
+    ('vy.r11', 'C2hR7eTs%61', 'Quản lý R11', Role.MANAGER, 'R11'),
+    ('hoa.r11', 'MJz2VcCf!60', 'Nhân viên R11', Role.STAFF, 'R11'),
+    ('an.r12', 'fkjJCdLb!26', 'Quản lý R12', Role.MANAGER, 'R12'),
+    ('phuc.r12', 'MuMMFa2D$35', 'Nhân viên R12', Role.STAFF, 'R12'),
+    ('nhi.r13', 'uHGZqCKK@96', 'Quản lý R13', Role.MANAGER, 'R13'),
+    ('thu.r13', 'WNAXGwxB@36', 'Nhân viên R13', Role.STAFF, 'R13'),
+    ('lam.r14', 'He7SdLBX@31', 'Quản lý R14', Role.MANAGER, 'R14'),
+    ('minh.r14', 'Uqr4qRF9%80', 'Nhân viên R14', Role.STAFF, 'R14'),
+    ('long.r15', 'wWthbmTZ%24', 'Quản lý R15', Role.MANAGER, 'R15'),
+    ('ha.r15', 'Lf7h7KrC#37', 'Nhân viên R15', Role.STAFF, 'R15'),
+    ('admin', 'VaHhXjMc!75', 'Quản trị viên', Role.ADMIN, None),
 ]
 # (số ngày trước ngày vận hành, giờ, phút)
 COUNT_HISTORY = [(1, 14, 10), (1, 21, 45), (0, 14, 0)]
@@ -32,30 +57,31 @@ class Command(BaseCommand):
     help = 'Tạo dữ liệu mẫu cho web QSR Forecast.'
 
     def add_arguments(self, parser):
-        parser.add_argument('--password', default=DEMO_PASSWORD)
         parser.add_argument('--no-plan', action='store_true', help='Không chạy dự báo để tạo đề xuất chờ duyệt.')
 
     def handle(self, *args, **opts):
         config = SystemConfig.get()
         self.stdout.write(f'Ngày vận hành: {config.operating_date:%d/%m/%Y}')
 
-        for username, name, role, store_id in USERS:
+        for username, password, name, role, store_id in ACCOUNTS:
             user, _ = User.objects.update_or_create(username=username, defaults={
                 'first_name': name, 'is_active': True, 'is_staff': role == Role.ADMIN, 'is_superuser': role == Role.ADMIN})
-            user.set_password(opts['password'])
+            user.set_password(password)
             user.save()
             Profile.objects.update_or_create(user=user, defaults={
                 'role': role, 'store': Store.objects.get(pk=store_id) if store_id else None})
-        self.stdout.write(self.style.SUCCESS(f'Tài khoản: {", ".join(u[0] for u in USERS)} | mật khẩu: {opts["password"]}'))
+        self.stdout.write(self.style.SUCCESS(f'Đã tạo {len(ACCOUNTS)} tài khoản (xem bảng trong Kich_Ban.md).'))
 
-        for store_id, staff_name in (('R01', 'minh.r01'), ('R02', 'mai.r02')):
-            self._seed_inventory(Store.objects.get(pk=store_id), User.objects.get(username=staff_name), config)
+        # Chỉ R01, R02 có sẵn lịch sử kiểm kho; R03–R15 để trống cho kịch bản kiểm thử kiểm kho từ đầu.
+        staff = {s: u for u, _, _, r, s in ACCOUNTS if r == Role.STAFF}
+        for store_id in ('R01', 'R02'):
+            self._seed_inventory(Store.objects.get(pk=store_id), User.objects.get(username=staff[store_id]), config)
 
         if not opts['no_plan']:
             store = Store.objects.get(pk='R01')
             day = plans.service_date_of(config)
             if plans.working_plan(store, day) is None:
-                plan = plans.create_plan(store, day, User.objects.get(username='lan.r01'), config)
+                plan = plans.create_plan(store, day, User.objects.get(username=next(u for u, _, _, r, st in ACCOUNTS if r == Role.MANAGER and st == 'R01')), config)
                 self.stdout.write(self.style.SUCCESS(f'Đề xuất R01 {day:%d/%m/%Y}: {plan.lines.count()} món, chờ duyệt'))
         self.stdout.write(f'Dòng thiếu số lượng: {adminops.refresh_data_notification(config):,}')
         self.stdout.write(self.style.SUCCESS('Xong.'))

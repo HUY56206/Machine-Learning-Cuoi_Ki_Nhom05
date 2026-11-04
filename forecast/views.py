@@ -132,7 +132,7 @@ def dashboard(request):
         todo = Paginator(plan.lines.filter(level=PrepLine.Level.SHORT).select_related('product'), PAGE_SIZE).get_page(request.GET.get('page'))
         attach_units(todo.object_list)
     return page(request, 'dashboard', 'dashboard', day=day, plan=plan, bars=bars, counts=counts, todo=todo, config=config,
-                no_data=plan is None and day != plans.service_date_of(config))
+                no_data=plan is None)
 
 
 # ----------------------------------------------------------------------------- quản lý · Chuẩn bị hàng
@@ -187,8 +187,8 @@ def forecast(request):
     plan = plans.working_plan(store, day)
 
     cards = []
-    for i in range(3):
-        d = plans.service_date_of(config) + timedelta(days=i)
+    for i in (-1, 0, 1):                                              # ngày trước · ngày đang xem · ngày sau
+        d = day + timedelta(days=i)
         p = plans.working_plan(store, d)
         total = round(sum(l.forecast_qty for l in p.lines.all()) * (1 + p.adjustment_pct / 100)) if p else None
         cards.append({'date': d, 'total': total, 'selected': d == day})
@@ -320,7 +320,7 @@ def _factor_effects(store_id, end):
 @role_required(STAFF)
 def staff_prep(request):
     store, config = request.user.profile.store, SystemConfig.get()
-    day = plans.service_date_of(config)
+    day = parse_date(request.GET.get('date'), plans.service_date_of(config))
     plan = plans.kitchen_plan(store, day, config)
     ctx = {'day': day, 'plan': plan, 'config': config}
     if plan is None:                                              # NV-1 trạng thái "Chờ duyệt"

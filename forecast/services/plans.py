@@ -90,8 +90,7 @@ def recalc_plan(plan):
 @transaction.atomic
 def create_plan(store, service_date, user, config=None):
     config = config or SystemConfig.get()
-    if service_date != service_date_of(config):               # chỉ dự báo ngày kế tiếp, không dùng số bán sau ngày vận hành
-        raise PlanError('no_data', 'Chỉ dự báo được cho ngày phục vụ kế tiếp.')
+    # Mọi ngày đều được dự báo; ngày không có dữ liệu đầu vào trong DB sẽ báo no_data từ engine.
     current = working_plan(store, service_date)
     if is_locked(current, config):
         raise PlanError('approved', 'Danh sách đã duyệt – cần mở lại trước khi chạy lại dự báo.')

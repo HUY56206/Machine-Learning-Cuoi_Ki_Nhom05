@@ -267,11 +267,15 @@ class Phase1LogicTests(Base):
         self.addCleanup(patch1.stop), self.addCleanup(patch2.stop)
         self.mgr, self.stf = self.users['mgr1'], self.users['stf1']
 
-    def test_only_next_service_date(self):                                                   # A1
-        for bad in (SERVICE + datetime.timedelta(days=1), OP_DATE):
+    def test_any_date_can_be_forecast(self):                                                 # A1
+        for day in (SERVICE + datetime.timedelta(days=1), OP_DATE):
+            self.assertEqual(plans.create_plan(self.r01, day, self.mgr).service_date, day)
+
+    def test_date_without_input_data_reports_no_data(self):
+        with mock.patch.object(engine, 'forecast_store', side_effect=engine.NoForecastData('x')):
             with self.assertRaises(plans.PlanError) as ctx:
-                plans.create_plan(self.r01, bad, self.mgr)
-            self.assertEqual(ctx.exception.code, 'no_data')
+                plans.create_plan(self.r01, SERVICE + datetime.timedelta(days=400), self.mgr)
+        self.assertEqual(ctx.exception.code, 'no_data')
 
     def test_no_approval_required_sends_to_kitchen(self):                                    # A2
         SystemConfig.objects.filter(pk=1).update(require_approval=False)

@@ -282,11 +282,11 @@
       ' class="w-9 h-9 rounded-lg border border-ink/15 grid place-items-center ' + (disabled ? 'opacity-30' : '') + '">' + (dir < 0 ? '‹' : '›') + '</button>';
   }
 
-  /* Chọn 1 ngày (tháng 09–11/2025). */
+  /* Chọn 1 ngày bất kỳ trong kỳ dữ liệu (01/2021 – 12/2025). */
   function calendar(o) {
     var sel = parseDate(o.selected);
     var view = { y: sel.y, m: sel.m };
-    var min = o.min || { y: 2025, m: 9 }, max = o.max || { y: 2025, m: 11 };
+    var min = o.min || { y: 2021, m: 1 }, max = o.max || { y: 2025, m: 12 };
     var picked = { d: sel.d, m: sel.m, y: sel.y };
     function render() {
       var atMin = view.y === min.y && view.m === min.m, atMax = view.y === max.y && view.m === max.m;

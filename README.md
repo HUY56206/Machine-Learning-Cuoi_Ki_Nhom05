@@ -74,12 +74,11 @@ brew services run mysql                 # bật MySQL (macOS)
 python manage.py migrate                # tạo bảng của web (hồ sơ, kiểm kho, đề xuất, thông báo, cấu hình)
 python manage.py seed_demo              # tài khoản mẫu + lịch sử kiểm kho + 1 đề xuất chờ duyệt
 python manage.py runserver              # http://127.0.0.1:8000/
-python manage.py test forecast          # 37 bài kiểm thử nghiệp vụ & phân quyền
+python manage.py test forecast          # 38 bài kiểm thử nghiệp vụ & phân quyền
 python manage.py send_reminders         # (cron) nhắc nhân viên kiểm kho cuối ca
 ```
 
-Tài khoản mẫu (mật khẩu mặc định `Qsr@2025!`, đổi bằng `seed_demo --password ...`):
-`lan.r01` quản lý R01 · `minh.r01` nhân viên R01 · `hung.r02` / `mai.r02` R02 · `admin` quản trị.
+Tài khoản mẫu: `seed_demo` tạo 31 tài khoản (mỗi cửa hàng R01–R15 một quản lý + một nhân viên, cộng `admin`), tên đăng nhập và mật khẩu đều khác nhau; danh sách ở `Kich_Ban.md` mục 1.3 và `Tai_Lieu_Tong_Hop_Do_An.md` mục 3.1. Quản lý/quản trị dự báo được cho mọi ngày có dữ liệu (01/2021 – 12/2025).
 
 | Thành phần | Vị trí |
 |---|---|
