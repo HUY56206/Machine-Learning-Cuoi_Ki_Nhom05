@@ -34,3 +34,7 @@ Assets/catboost_info/
 Slides/
 popup/
 Assets/figures/
+
+# Bản xuất CSDL (nặng, gửi riêng cho nhóm, không đẩy lên GitHub)
+*.sql.gz
+qsr_db.sql

@@ -78,7 +78,7 @@ python manage.py test forecast          # 38 bài kiểm thử nghiệp vụ & p
 python manage.py send_reminders         # (cron) nhắc nhân viên kiểm kho cuối ca
 ```
 
-Tài khoản mẫu: `seed_demo` tạo 31 tài khoản (mỗi cửa hàng R01–R15 một quản lý + một nhân viên, cộng `admin`), tên đăng nhập và mật khẩu đều khác nhau; danh sách ở `Kich_Ban.md` mục 1.3 và `Tai_Lieu_Tong_Hop_Do_An.md` mục 3.1. Quản lý/quản trị dự báo được cho mọi ngày có dữ liệu (01/2021 – 12/2025).
+Tài khoản mẫu: `seed_demo` tạo 31 tài khoản (mỗi cửa hàng R01–R15 một quản lý + một nhân viên, cộng `admin`), tên đăng nhập và mật khẩu đều khác nhau; danh sách ở `Kich_Ban.md` mục 1.3 và `Tai_Lieu_Tong_Hop_Do_An.md` mục 3.1. Quản lý/quản trị dự báo được cho các ngày 01/07/2025 – 31/12/2025 (ngoài tập train).
 
 | Thành phần | Vị trí |
 |---|---|

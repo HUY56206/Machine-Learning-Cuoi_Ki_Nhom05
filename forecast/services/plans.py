@@ -1,6 +1,6 @@
 """Nghiệp vụ đề xuất chuẩn bị hàng & kiểm kho (không phụ thuộc HTTP, dễ kiểm thử)."""
 import math
-from datetime import timedelta
+from datetime import date, timedelta
 
 from django.db import transaction
 from django.utils import timezone
@@ -9,6 +9,7 @@ from forecast.models import (InventoryCount, InventoryItem, Notification, PrepLi
                              Store, SystemConfig, WeatherEvent)
 from forecast.services import engine
 from forecast.services.notifications import notify
+from Utils import Config
 
 
 class PlanError(Exception):
@@ -17,6 +18,12 @@ class PlanError(Exception):
     def __init__(self, code, message=''):
         super().__init__(message or code)
         self.code = code
+
+
+def forecast_range():
+    """Khoảng ngày được phép dự báo trên web: từ ngày đầu tập validation đến hết tập test (theo Utils/Config.py).
+    Các ngày thuộc tập train mô hình đã học nên không cho chọn (kết quả sẽ đẹp giả tạo)."""
+    return date.fromisoformat(Config.VAL_START), date.fromisoformat(Config.TEST_END)
 
 
 # ----------------------------------------------------------------------------- truy vấn trạng thái
@@ -90,7 +97,11 @@ def recalc_plan(plan):
 @transaction.atomic
 def create_plan(store, service_date, user, config=None):
     config = config or SystemConfig.get()
-    # Mọi ngày đều được dự báo; ngày không có dữ liệu đầu vào trong DB sẽ báo no_data từ engine.
+    first, last = forecast_range()
+    if service_date < first:
+        raise PlanError('train_data', f'Ngày {service_date:%d/%m/%Y} thuộc dữ liệu huấn luyện của mô hình, '
+                                      f'không dự báo. Chọn ngày từ {first:%d/%m/%Y} đến {last:%d/%m/%Y}.')
+    # Ngày sau khoảng này (hoặc không có dữ liệu đầu vào trong DB) sẽ báo no_data từ engine.
     current = working_plan(store, service_date)
     if is_locked(current, config):
         raise PlanError('approved', 'Danh sách đã duyệt – cần mở lại trước khi chạy lại dự báo.')

@@ -271,6 +271,15 @@ class Phase1LogicTests(Base):
         for day in (SERVICE + datetime.timedelta(days=1), OP_DATE):
             self.assertEqual(plans.create_plan(self.r01, day, self.mgr).service_date, day)
 
+    def test_training_dates_are_rejected(self):
+        first, _ = plans.forecast_range()
+        self.assertEqual(first, datetime.date(2025, 7, 1))
+        for day in (first - datetime.timedelta(days=1), datetime.date(2025, 6, 25), datetime.date(2021, 3, 1)):
+            with self.assertRaises(plans.PlanError) as ctx:
+                plans.create_plan(self.r01, day, self.mgr)
+            self.assertEqual(ctx.exception.code, 'train_data')
+        self.assertEqual(plans.create_plan(self.r01, first, self.mgr).service_date, first)   # ngày đầu validation được phép
+
     def test_date_without_input_data_reports_no_data(self):
         with mock.patch.object(engine, 'forecast_store', side_effect=engine.NoForecastData('x')):
             with self.assertRaises(plans.PlanError) as ctx:

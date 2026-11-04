@@ -282,16 +282,24 @@
       ' class="w-9 h-9 rounded-lg border border-ink/15 grid place-items-center ' + (disabled ? 'opacity-30' : '') + '">' + (dir < 0 ? '‹' : '›') + '</button>';
   }
 
-  /* Chọn 1 ngày bất kỳ trong kỳ dữ liệu (01/2021 – 12/2025). */
+  function parseISO(t) { var a = t.split('-'); return { y: +a[0], m: +a[1], d: +a[2] }; }
+
+  /* Chọn 1 ngày; với "ngày phục vụ" chỉ trong khoảng cho phép dự báo (ngoài tập train, xem plans.forecast_range). */
   function calendar(o) {
     var sel = parseDate(o.selected);
     var view = { y: sel.y, m: sel.m };
-    var min = o.min || { y: 2021, m: 1 }, max = o.max || { y: 2025, m: 12 };
+    var lo = o.range ? parseISO(o.range.min) : null, hi = o.range ? parseISO(o.range.max) : null;
+    var min = lo ? { y: lo.y, m: lo.m } : (o.min || { y: 2021, m: 1 }), max = hi ? { y: hi.y, m: hi.m } : (o.max || { y: 2025, m: 12 });
+    function key(y, m, d) { return y * 10000 + m * 100 + d; }
+    function allowed(y, m, d) { return !o.range || (key(y, m, d) >= key(lo.y, lo.m, lo.d) && key(y, m, d) <= key(hi.y, hi.m, hi.d)); }
     var picked = { d: sel.d, m: sel.m, y: sel.y };
+    if (lo && key(view.y, view.m, 1) < key(min.y, min.m, 1)) view = { y: min.y, m: min.m };
+    if (hi && key(view.y, view.m, 1) > key(max.y, max.m, 1)) view = { y: max.y, m: max.m };
     function render() {
       var atMin = view.y === min.y && view.m === min.m, atMax = view.y === max.y && view.m === max.m;
       var grid = monthGrid(view.y, view.m, function (d) {
         var on = picked.d === d && picked.m === view.m && picked.y === view.y;
+        if (!allowed(view.y, view.m, d)) return '<button type="button" disabled class="mx-auto w-9 h-9 rounded-full text-ink/25">' + d + '</button>';
         return '<button type="button" data-day="' + d + '" class="mx-auto w-9 h-9 rounded-full ' +
           (on ? 'bg-ink text-white' : 'hover:bg-page') + '">' + d + '</button>';
       });
@@ -957,7 +965,7 @@
       }
       return calendar({
         title: kind === 'inventory' ? 'Chọn ngày kiểm kho' : 'Chọn ngày phục vụ',
-        selected: cal.value, onApply: function (v) {
+        selected: cal.value, range: kind === 'inventory' ? null : window.QSR_FORECAST_RANGE, onApply: function (v) {
           cal.value = v; cal.dispatchEvent(new Event('change'));
           if (cal.hasAttribute('data-autosubmit') && cal.form) cal.form.submit();
         }
