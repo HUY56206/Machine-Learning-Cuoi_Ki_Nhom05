@@ -5,14 +5,11 @@
 {% block content %}
 <h1 class="text-[28px] font-medium mt-6 mb-5">Dự báo &amp; Mô hình</h1>
 
-<section class="bg-white border border-ink/10 rounded-xl p-5 mb-4 text-sm leading-7">
-  <h2 class="text-lg font-medium mb-1">Thông tin mô hình</h2>
-  {% if info.missing %}<p class="text-[#9B1C1C]">Không nạp được mô hình {{ info.file }} · Kiểm tra tệp Assets/{{ info.file }} rồi tải lại trang.</p>{% else %}
-  <p>{{ info.name|title }} · {{ info.file }} · Huấn luyện đến {{ info.trained_until|slice:"8:10" }}/{{ info.trained_until|slice:"5:7" }}/{{ info.trained_until|slice:":4" }}</p>{% endif %}
-  <p class="text-xs">Đánh giá ngoại tuyến · 15 cửa hàng · {{ info.test_range }}</p>
-  {% if info.wmape %}<p>wMAPE: {{ info.wmape|floatformat:1 }}% · Seasonal Naive: {{ info.naive|floatformat:1 }}% · Giảm sai số khoảng {{ info.gain|floatformat:1 }}%</p>{% endif %}
-  <p class="text-xs">Kết quả tập test phục vụ báo cáo nghiên cứu; dữ liệu vận hành demo chỉ đến {{ operating_date|dm }}.</p>
+{% if info.missing %}
+<section class="bg-white border border-ink/10 rounded-xl p-5 mb-4 text-sm">
+  <p class="text-[#9B1C1C]">Không nạp được mô hình {{ info.file }} · Kiểm tra tệp Assets/{{ info.file }} rồi tải lại trang.</p>
 </section>
+{% endif %}
 
 <section class="bg-white rounded-3xl p-5 mb-4 text-sm">
   <h2 class="text-lg font-medium mb-3">Chạy dự báo</h2>
@@ -31,6 +28,18 @@
     {% for b in bars %}<div class="flex-1"><div>{{ b.value|thousands }}</div><div class="mx-auto w-7 rounded-sm {% if b.forecast %}bg-forest{% else %}bg-sage{% endif %}" style="height:{{ b.height }}px"></div><div class="mt-2 text-ink/70">{{ b.label|dm:"%d/%m" }}</div></div>{% empty %}<p class="text-ink/60">Chưa có số liệu.</p>{% endfor %}
   </div>
   <p class="text-xs text-ink/60 mt-3">Thực tế đến {{ operating_date|dm:"%d/%m" }}; ngày {{ service_date|dm:"%d/%m" }} chỉ có dự báo.</p>
+</section>
+
+<section class="bg-white rounded-3xl p-5 mb-4 text-sm" id="shap-box" data-store="{{ selected.pk }}">
+  <h2 class="text-base font-medium mb-3">Mô hình dựa vào đâu để dự báo · {{ selected.pk }} · {{ selected.restaurant_name }}</h2>
+  <div id="shap-groups" class="text-ink/60">Đang tính…</div>
+  <div class="mt-5 pt-4 border-t border-ink/10">
+    <div class="flex items-end gap-3">
+      <div class="flex-1"><label class="block text-ink/70 mb-1.5">Xem chi tiết một món</label>
+        <select id="shap-product" class="w-full h-11 rounded-full border border-ink/15 px-4"><option value="">Chọn món…</option>{% for p in products %}<option value="{{ p.pk }}">{{ p.menu_item_name }}</option>{% endfor %}</select></div>
+    </div>
+    <div id="shap-item" class="mt-3"></div>
+  </div>
 </section>
 
 <section class="bg-white rounded-3xl p-5 text-sm">
@@ -59,4 +68,41 @@
 {% endblock %}
 
 {% block scripts %}{{ store_choices|json_script:"store-choices" }}
-<script>window.QSR_DATA = { stores: JSON.parse(document.getElementById('store-choices').textContent) };</script>{% endblock %}
+<script>window.QSR_DATA = { stores: JSON.parse(document.getElementById('store-choices').textContent) };</script>
+<script>
+(function () {
+  var box = document.getElementById('shap-box'); if (!box) return;
+  var store = box.getAttribute('data-store');
+  function esc(t) { return String(t).replace(/[&<>"]/g, function (c) { return {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c]; }); }
+  function num(x) { return String(x).replace('.', ','); }
+  function bars(items) {
+    var mx = Math.max.apply(null, items.map(function (i) { return i.share; })) || 1;
+    return items.map(function (i) {
+      var w = Math.max(3, Math.round(i.share / mx * 100));
+      return '<div class="flex items-center gap-3 py-1"><span class="w-[230px] text-ink/80">' + esc(i.label) + '</span>' +
+        '<span class="flex-1"><span class="block h-2 rounded-full bg-forest" style="width:' + w + '%"></span></span><span class="w-14 text-right">' + i.share + '%</span></div>';
+    }).join('');
+  }
+  function get(url) { return fetch(url, { credentials: 'same-origin' }).then(function (r) { return r.json(); }); }
+  get('/api/admin/explain/?store=' + encodeURIComponent(store)).then(function (res) {
+    var host = document.getElementById('shap-groups');
+    if (!res.ok) { host.textContent = res.message || 'Không tính được.'; return; }
+    host.className = '';
+    host.innerHTML = '<div class="font-medium mb-1">Yếu tố nào ảnh hưởng nhiều nhất tới dự báo (tỉ lệ %)</div>' + bars(res.importance_groups) +
+      '<div class="font-medium mt-4 mb-1">Chi tiết theo từng yếu tố (10 yếu tố đầu)</div>' + bars(res.importance_features);
+  });
+  document.getElementById('shap-product').onchange = function () {
+    var host = document.getElementById('shap-item'), p = this.value;
+    if (!p) { host.innerHTML = ''; return; }
+    host.innerHTML = '<span class="text-ink/60">Đang tính…</span>';
+    get('/api/admin/explain/?store=' + encodeURIComponent(store) + '&product=' + encodeURIComponent(p)).then(function (res) {
+      if (!res.ok || !res.item) { host.textContent = res.message || 'Không có dữ liệu cho món này.'; return; }
+      host.innerHTML = 
+        '<table class="w-full"><thead class="bg-page text-ink/70"><tr><th class="text-left font-normal px-3 py-2">Yếu tố</th><th class="text-left font-normal px-3">Nhóm</th><th class="text-left font-normal px-3">Giá trị</th><th class="text-right font-normal px-3">Làm dự báo</th></tr></thead><tbody class="divide-y divide-ink/10">' +
+        res.item.features.map(function (f) {
+          return '<tr><td class="px-3 py-2">' + esc(f.label) + '</td><td class="px-3 text-ink/70">' + esc(f.group) + '</td><td class="px-3">' + esc(f.value) + '</td><td class="px-3 text-right ' + (f.shap < 0 ? 'text-[#C0262D]' : '') + '">' + (f.shap >= 0 ? 'tăng ' : 'giảm ') + num(Math.abs(f.shap)) + ' ' + esc(res.item.unit) + '</td></tr>';
+        }).join('') + '</tbody></table>';
+    });
+  };
+})();
+</script>{% endblock %}

@@ -4,110 +4,217 @@
   <meta charset="UTF-8">
   <meta name="csrf-token" content="{{ csrf_token }}">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#1F5C46">
   <title>{% block title %}QSR Forecast{% endblock %}</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@0.460.0/dist/umd/lucide.min.js"></script>
   <script>window.QSR_FORECAST_RANGE = {min: '{{ forecast_min }}', max: '{{ forecast_max }}'};</script>
-<script>
+  <script>
     tailwind.config = {
       theme: {
         extend: {
-          fontFamily: { sans: ['Roboto', 'sans-serif'] },
-          colors: {
-            ink: '#1A2321',
-            page: '#F5F5F0',
-            mint: '#8FD5C7',
-            forest: '#22533F',
-            sage: '#8FA89B',
-          },
+          fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'], display: ['Be Vietnam Pro', 'Inter', 'sans-serif'] },
+          colors: { ink: '#16211C', page: '#F5F7F4', mint: '#9ADBC9', forest: '#1F5C46', sage: '#8FA89B' },
         },
       },
     }
   </script>
+  <style>
+    /* ===================== Hệ thống thiết kế (áp lên toàn bộ trang) ===================== */
+    :root {
+      --brand: #1F5C46; --brand-600: #184A38; --brand-50: #E9F3EE; --brand-100: #D3E8DD;
+      --ink: #16211C; --muted: #5B6A63; --line: #E4E9E4; --page: #F5F7F4;
+      --shadow-sm: 0 1px 2px rgba(22,33,28,.05);
+      --shadow-card: 0 1px 2px rgba(22,33,28,.04), 0 8px 24px -8px rgba(22,33,28,.08);
+      --shadow-btn: 0 1px 2px rgba(22,33,28,.12), 0 6px 14px -6px rgba(31,92,70,.55);
+      --ease: cubic-bezier(.2,.7,.2,1);
+    }
+    html { -webkit-text-size-adjust: 100%; scroll-behavior: smooth; }
+    body { font-family: Inter, system-ui, sans-serif; font-size: 14px; line-height: 1.6; color: var(--ink); background: var(--page);
+           -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; font-feature-settings: 'cv11', 'ss01'; }
+    h1, h2, h3 { font-family: 'Be Vietnam Pro', Inter, sans-serif; letter-spacing: -0.015em; color: inherit; }
+    main h1 { font-size: clamp(1.5rem, 1.1rem + 1.2vw, 1.875rem) !important; font-weight: 600 !important; line-height: 1.2; margin-top: 1.75rem !important; margin-bottom: 1.5rem !important; }
+    main h2 { font-weight: 600 !important; }
+    main h2.text-lg, main h2.text-base { font-size: 1.0625rem !important; }
+    .tabular, td, th { font-variant-numeric: tabular-nums; }
+
+    /* Nút chính (CTA): xanh thương hiệu, nổi nhẹ, nhấc lên khi hover */
+    button.bg-ink, a.bg-ink { background: var(--brand) !important; color: #fff !important; box-shadow: var(--shadow-btn);
+      transition: transform .18s var(--ease), box-shadow .18s var(--ease), background-color .18s var(--ease); font-weight: 600; }
+    button.bg-ink:hover, a.bg-ink:hover { background: var(--brand-600) !important; transform: translateY(-1px); box-shadow: 0 2px 4px rgba(22,33,28,.14), 0 10px 20px -8px rgba(31,92,70,.6); }
+    button.bg-ink:active, a.bg-ink:active { transform: translateY(0); box-shadow: var(--shadow-sm); }
+    button.bg-ink:disabled, button.bg-ink[disabled], .opacity-50.bg-ink { box-shadow: none; transform: none; }
+    /* Nút phụ: viền mảnh, hover nền xanh nhạt */
+    button.bg-white, a.bg-white, button.border-ink\/15, a.border-ink\/15, button.border-ink\/20, a.border-ink\/20 {
+      transition: background-color .18s var(--ease), border-color .18s var(--ease), box-shadow .18s var(--ease), transform .18s var(--ease); }
+    button.border-ink\/15:hover:not(:disabled), a.border-ink\/15:hover, button.border-ink\/20:hover:not(:disabled), a.border-ink\/20:hover,
+    button.bg-white.border:hover:not(:disabled), a.bg-white.border:hover { background: var(--brand-50); border-color: rgba(31,92,70,.35); box-shadow: var(--shadow-sm); }
+    button:disabled, button[disabled] { cursor: not-allowed; }
+    button, a { -webkit-tap-highlight-color: transparent; }
+
+    /* Thẻ */
+    main .bg-white.rounded-3xl, main .bg-white.rounded-2xl, main .bg-white.rounded-xl {
+      border: 1px solid var(--line); box-shadow: var(--shadow-card); border-radius: 1.25rem; }
+    main section.bg-white { padding: 1.5rem; }
+    [role=dialog] { border-radius: 1.5rem; box-shadow: 0 24px 60px -12px rgba(22,33,28,.35) !important; }
+    [data-backdrop] { backdrop-filter: blur(4px); background: rgba(22,33,28,.5) !important; animation: fade .18s var(--ease); }
+    [role=dialog] { animation: pop .22s var(--ease); }
+    @keyframes fade { from { opacity: 0 } to { opacity: 1 } }
+    @keyframes pop { from { opacity: 0; transform: translateY(8px) scale(.985) } to { opacity: 1; transform: none } }
+
+    /* Bảng */
+    main table { border-collapse: separate; border-spacing: 0; }
+    main thead { background: #F0F4EF !important; }
+    main thead th { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; font-weight: 600 !important; color: var(--muted) !important; padding-top: .8rem !important; padding-bottom: .8rem !important; white-space: nowrap; }
+    main tbody tr { transition: background-color .15s; }
+    main tbody tr:hover { background: #F8FAF7; }
+    main tbody td { padding-top: .85rem; padding-bottom: .85rem; }
+    main .divide-y > :not([hidden]) ~ :not([hidden]) { border-color: var(--line) !important; }
+
+    /* Form */
+    input[type=text], input[type=password], input[type=number], input[type=date], textarea, select {
+      transition: border-color .15s, box-shadow .15s; }
+    input:focus, select:focus, textarea:focus { outline: none !important; border-color: var(--brand) !important; box-shadow: 0 0 0 4px rgba(31,92,70,.14); }
+    :focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+    input::placeholder, textarea::placeholder { color: #93A099; }
+    input[type=checkbox], input[type=radio] { accent-color: var(--brand); }
+    select {
+      -webkit-appearance: none; -moz-appearance: none; appearance: none; padding-right: 2.5rem !important; cursor: pointer;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2316211C' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+      background-repeat: no-repeat; background-position: right 1rem center; background-size: 16px 16px; }
+    select:disabled { opacity: .5; }
+
+    /* Thanh bên */
+    .side { background: #fff; border-right: 1px solid var(--line); }
+    .brand-mark { background: linear-gradient(135deg, #2A7A5E, var(--brand-600)); box-shadow: 0 6px 14px -6px rgba(31,92,70,.7); }
+    .nav-link { display: flex; align-items: center; gap: .75rem; padding: .65rem .85rem; border-radius: .85rem; color: #3E4D46; font-weight: 500;
+      transition: background-color .15s, color .15s; }
+    .nav-link i, .nav-link svg { width: 18px; height: 18px; flex: none; opacity: .85; }
+    .nav-link:hover { background: #F1F5F1; color: var(--ink); }
+    .nav-link.is-active { background: var(--brand-50); color: var(--brand); font-weight: 600; box-shadow: inset 3px 0 0 var(--brand); }
+    .nav-link.is-active i, .nav-link.is-active svg { opacity: 1; }
+
+    /* Thanh trên */
+    .topbar { position: sticky; top: 0; z-index: 30; background: rgba(245,247,244,.85); backdrop-filter: blur(10px); border-bottom: 1px solid var(--line); }
+    .chip { display: inline-flex; align-items: center; gap: .5rem; height: 2.25rem; padding: 0 .9rem; border-radius: 999px; background: #fff; border: 1px solid var(--line); font-weight: 500; color: #3E4D46; }
+    .chip i, .chip svg { width: 15px; height: 15px; color: var(--brand); }
+    .icon-btn { width: 2.5rem; height: 2.5rem; border-radius: 999px; background: #fff; border: 1px solid var(--line); display: grid; place-items: center; color: #3E4D46;
+      transition: background-color .15s, border-color .15s, transform .15s; }
+    .icon-btn:hover { background: var(--brand-50); border-color: rgba(31,92,70,.3); }
+    .icon-btn i, .icon-btn svg { width: 18px; height: 18px; }
+
+    /* Thanh cuộn mảnh */
+    * { scrollbar-width: thin; scrollbar-color: #C9D2CB transparent; }
+    ::-webkit-scrollbar { width: 8px; height: 8px } ::-webkit-scrollbar-thumb { background: #C9D2CB; border-radius: 8px }
+
+    /* Responsive */
+    .side { position: fixed; inset: 0 auto 0 0; width: 272px; z-index: 50; transform: translateX(-100%); transition: transform .25s var(--ease); overflow-y: auto; }
+    body.nav-open .side { transform: none; box-shadow: 0 0 60px rgba(22,33,28,.3); }
+    .scrim { position: fixed; inset: 0; z-index: 40; background: rgba(22,33,28,.4); backdrop-filter: blur(2px); opacity: 0; pointer-events: none; transition: opacity .2s; }
+    body.nav-open .scrim { opacity: 1; pointer-events: auto; }
+    @media (min-width: 1024px) {
+      .side { position: sticky; top: 0; height: 100vh; transform: none; box-shadow: none !important; flex: none; }
+      .scrim, .menu-btn { display: none !important; }
+    }
+    @media (max-width: 767px) {
+      main table { display: block; overflow-x: auto; white-space: nowrap; }
+      main section.bg-white { padding: 1rem; }
+      html, body { overflow-x: hidden; }
+      main .flex:not(.flex-col):not([class*="h-["]):not(.flex-nowrap) { flex-wrap: wrap; row-gap: .75rem; }
+      main .rounded-full { white-space: nowrap; }
+      main h1 { margin-top: 1.25rem !important; margin-bottom: 1rem !important; }
+      main form.flex { width: 100%; }
+    }
+    @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; scroll-behavior: auto !important; } }
+  </style>
 </head>
 <body class="font-sans bg-page text-ink min-h-screen" data-role="{{ role|default:'manager' }}" data-user="{{ request.user.first_name|default:request.user.username }}" data-store="{% if my_store %}{{ my_store.pk }} · {{ my_store.restaurant_name }}{% endif %}">
 {% block body %}
 <div class="flex min-h-screen">
-  <!-- Sidebar -->
-  <aside class="w-[232px] shrink-0 bg-gradient-to-b from-[#E9E0EE] to-page flex flex-col justify-between p-4 sticky top-0 h-screen">
+  <div class="scrim" data-nav-close></div>
+  <!-- Thanh bên -->
+  <aside class="side flex flex-col justify-between p-4" aria-label="Điều hướng chính">
     <div>
-      <a href="{% url 'forecast:home' %}" class="flex items-center gap-2.5 px-1 py-3 mb-4">
-        <span class="w-9 h-9 rounded-xl bg-ink text-white grid place-items-center">
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 17l6-6 4 4 8-8M15 7h6v6"/></svg>
-        </span>
-        <span class="font-medium text-lg">QSR Forecast</span>
+      <a href="{% url 'forecast:home' %}" class="flex items-center gap-3 px-2 py-3 mb-5">
+        <span class="brand-mark w-10 h-10 rounded-xl text-white grid place-items-center"><i data-lucide="trending-up" class="w-5 h-5"></i></span>
+        <span class="font-display font-semibold text-[17px] tracking-tight leading-tight">QSR Forecast<span class="block text-[11px] font-medium text-[#5B6A63] tracking-normal">Dự báo &amp; chuẩn bị hàng</span></span>
       </a>
       {% with active=active_menu|default:'dashboard' %}
-      <nav class="flex flex-col gap-1.5 text-sm">
+      <nav class="flex flex-col gap-1 text-sm">
         {% if role == 'admin' %}
-          {% include 'forecast/_nav_item.html' with url='forecast:data' key='data' label='Dữ liệu' icon='<ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/>' %}
-          {% include 'forecast/_nav_item.html' with url='forecast:model' key='model' label='Dự báo & Mô hình' icon='<path d="M4 20V4M4 20h16M9 20v-8M14 20V8M19 20v-5"/>' %}
-          {% include 'forecast/_nav_item.html' with url='forecast:stores' key='stores' label='Cửa hàng' icon='<path d="M3 9l1-5h16l1 5M3 9v11h18V9M3 9h18M9 20v-6h6v6"/>' %}
-          {% include 'forecast/_nav_item.html' with url='forecast:accounts' key='accounts' label='Tài khoản' icon='<circle cx="9" cy="8" r="3.5"/><path d="M2 20c0-3.5 3-6 7-6s7 2.5 7 6M16 4.5a3.5 3.5 0 010 7M22 20c0-2.8-1.8-4.8-4.5-5.6"/>' %}
-          {% include 'forecast/_nav_item.html' with url='forecast:config' key='config' label='Cấu hình' icon='<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 00.3 1.8l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.7 1.7 0 00-1.8-.3 1.7 1.7 0 00-1 1.5V21a2 2 0 11-4 0v-.1a1.7 1.7 0 00-1.1-1.5 1.7 1.7 0 00-1.8.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.7 1.7 0 00.3-1.8 1.7 1.7 0 00-1.5-1H3a2 2 0 110-4h.1a1.7 1.7 0 001.5-1.1 1.7 1.7 0 00-.3-1.8l-.1-.1a2 2 0 112.8-2.8l.1.1a1.7 1.7 0 001.8.3H9a1.7 1.7 0 001-1.5V3a2 2 0 114 0v.1a1.7 1.7 0 001 1.5 1.7 1.7 0 001.8-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.7 1.7 0 00-.3 1.8V9a1.7 1.7 0 001.5 1H21a2 2 0 110 4h-.1a1.7 1.7 0 00-1.5 1z"/>' %}
+          {% include 'forecast/_nav_item.html' with url='forecast:data' key='data' label='Dữ liệu' lucide='database' %}
+          {% include 'forecast/_nav_item.html' with url='forecast:model' key='model' label='Dự báo & Mô hình' lucide='brain-circuit' %}
+          {% include 'forecast/_nav_item.html' with url='forecast:stores' key='stores' label='Cửa hàng' lucide='store' %}
+          {% include 'forecast/_nav_item.html' with url='forecast:accounts' key='accounts' label='Tài khoản' lucide='users' %}
+          {% include 'forecast/_nav_item.html' with url='forecast:config' key='config' label='Cấu hình' lucide='settings' %}
         {% elif role == 'staff' %}
-          {% include 'forecast/_nav_item.html' with url='forecast:staff_prep' key='staff_prep' label='Chuẩn bị hàng' icon='<rect x="4" y="3" width="16" height="18" rx="2"/><path d="M9 12l2 2 4-4"/>' %}
-          {% include 'forecast/_nav_item.html' with url='forecast:inventory' key='inventory' label='Kiểm kho' icon='<path d="M12 3l8 4.5v9L12 21l-8-4.5v-9L12 3zM12 12l8-4.5M12 12v9M12 12L4 7.5"/>' %}
+          {% include 'forecast/_nav_item.html' with url='forecast:staff_prep' key='staff_prep' label='Chuẩn bị hàng' lucide='clipboard-check' %}
+          {% include 'forecast/_nav_item.html' with url='forecast:inventory' key='inventory' label='Kiểm kho' lucide='package-check' %}
         {% else %}
-          {% include 'forecast/_nav_item.html' with url='forecast:dashboard' key='dashboard' label='Tổng quan' icon='<path d="M3 11l9-8 9 8v9a1 1 0 01-1 1h-5v-6H9v6H4a1 1 0 01-1-1v-9z"/>' %}
-          {% include 'forecast/_nav_item.html' with url='forecast:prep' key='prep' label='Chuẩn bị hàng' icon='<rect x="4" y="3" width="16" height="18" rx="2"/><path d="M9 12l2 2 4-4"/>' %}
-          {% include 'forecast/_nav_item.html' with url='forecast:forecast' key='forecast' label='Dự báo' icon='<path d="M3 17l6-6 4 4 8-8M15 7h6v6"/>' %}
-          {% include 'forecast/_nav_item.html' with url='forecast:report' key='report' label='Báo cáo' icon='<path d="M4 20V4M4 20h16M9 20v-8M14 20V8M19 20v-5"/>' %}
+          {% include 'forecast/_nav_item.html' with url='forecast:dashboard' key='dashboard' label='Tổng quan' lucide='layout-dashboard' %}
+          {% include 'forecast/_nav_item.html' with url='forecast:prep' key='prep' label='Chuẩn bị hàng' lucide='clipboard-list' %}
+          {% include 'forecast/_nav_item.html' with url='forecast:forecast' key='forecast' label='Dự báo' lucide='trending-up' %}
+          {% include 'forecast/_nav_item.html' with url='forecast:report' key='report' label='Báo cáo' lucide='bar-chart-3' %}
         {% endif %}
       </nav>
       {% endwith %}
     </div>
 
-    <div>
-      <div class="bg-white rounded-2xl p-3 flex items-center gap-3 mb-4 shadow-sm">
-        <span class="w-9 h-9 rounded-full bg-mint grid place-items-center text-sm font-medium">{{ request.user.first_name|default:request.user.username|initial }}</span>
-        <div class="text-sm leading-tight text-ink/80">
-          <div>{{ request.user.first_name|default:request.user.username }}</div>
-          <div>{% if role == 'admin' %}Toàn hệ thống{% else %}{{ profile_obj.get_role_display }}{% endif %}</div>
+    <div class="pt-4">
+      <div class="rounded-2xl border border-[var(--line)] bg-[#FAFBF9] p-3 flex items-center gap-3 mb-3">
+        <span class="w-10 h-10 rounded-full bg-mint grid place-items-center text-sm font-semibold text-forest">{{ request.user.first_name|default:request.user.username|initial }}</span>
+        <div class="text-sm leading-tight min-w-0">
+          <div class="font-semibold truncate">{{ request.user.first_name|default:request.user.username }}</div>
+          <div class="text-[12px] text-[#5B6A63] truncate">{% if role == 'admin' %}Toàn hệ thống{% else %}{{ profile_obj.get_role_display }}{% endif %}</div>
         </div>
       </div>
-      <a href="{% url 'forecast:profile' %}" class="flex items-center gap-2 px-2 mb-1 text-sm text-ink/70 hover:text-ink">
-        <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-7 8-7s8 3 8 7"/></svg>
-        Hồ sơ cá nhân
-      </a>
+      <a href="{% url 'forecast:profile' %}" class="nav-link text-sm"><i data-lucide="user-round"></i>Hồ sơ cá nhân</a>
       <form method="post" action="{% url 'forecast:logout' %}">
         {% csrf_token %}
-        <button type="submit" class="flex items-center gap-2 px-2 text-sm text-ink/70 hover:text-ink">
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9"/></svg>
-          Đăng xuất
-        </button>
+        <button type="submit" class="nav-link text-sm w-full"><i data-lucide="log-out"></i>Đăng xuất</button>
       </form>
     </div>
   </aside>
 
-  <!-- Main -->
-  <main class="flex-1 min-w-0 px-8 py-5">
-    <header class="flex items-center justify-between text-sm text-ink/80">
-      <div class="flex items-center gap-3">
-        {% if role == 'admin' %}
-        <span class="flex items-center gap-2">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 1.7 3.6 3 8 3s8-1.3 8-3V5"/></svg>
-          Phạm vi: Toàn hệ thống · 15 cửa hàng
-        </span>
-        {% else %}
-        <span class="flex items-center gap-2">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 9l1-5h16l1 5M3 9v11h18V9M3 9h18M9 20v-6h6v6"/></svg>
-          {{ my_store.pk }} · {{ my_store.restaurant_name }}
-        </span>
-        <span class="w-px h-4 bg-ink/20"></span>
-        <span>Ngày vận hành: {{ operating_date|dm }}</span>
-        {% endif %}
+  <!-- Nội dung -->
+  <div class="flex-1 min-w-0">
+    <header class="topbar">
+      <div class="flex items-center justify-between gap-3 px-4 sm:px-6 lg:px-10 py-3 text-sm">
+        <div class="flex items-center gap-2.5 min-w-0">
+          <button type="button" class="icon-btn menu-btn" data-nav-open aria-label="Mở menu"><i data-lucide="menu"></i></button>
+          {% if role == 'admin' %}
+          <span class="chip"><i data-lucide="database"></i><span class="truncate">Toàn hệ thống · 15 cửa hàng</span></span>
+          {% else %}
+          <span class="chip min-w-0"><i data-lucide="store"></i><span class="truncate">{{ my_store.pk }} · {{ my_store.restaurant_name }}</span></span>
+          <span class="chip hidden sm:inline-flex"><i data-lucide="calendar-days"></i>Ngày vận hành {{ operating_date|dm }}</span>
+          {% endif %}
+        </div>
+        <button type="button" data-act="notif" aria-label="Thông báo" class="icon-btn relative shrink-0">
+          <i data-lucide="bell"></i>
+          {% if unread_count %}<span id="notif-badge" class="absolute -top-1 -right-1 min-w-[1.15rem] h-[1.15rem] px-1 rounded-full bg-[#C0262D] text-white text-[11px] font-semibold grid place-items-center ring-2 ring-[#F5F7F4]">{{ unread_count }}</span>{% endif %}
+        </button>
       </div>
-      <button type="button" data-act="notif" aria-label="Thông báo" class="relative w-11 h-11 rounded-full bg-white border border-ink/10 grid place-items-center">
-        <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 17h5l-1.4-1.4A2 2 0 0118 14.2V11a6 6 0 10-12 0v3.2a2 2 0 01-.6 1.4L4 17h5m6 0a3 3 0 11-6 0"/></svg>
-        {% if unread_count %}<span id="notif-badge" class="absolute -top-1 -right-1 min-w-5 h-5 px-1 rounded-full bg-[#9B1C1C] text-white text-[11px] grid place-items-center">{{ unread_count }}</span>{% endif %}
-      </button>
     </header>
-
-    {% block content %}{% endblock %}
-  </main>
+    <main class="px-4 sm:px-6 lg:px-10 pb-12 max-w-[1480px] mx-auto">
+      {% block content %}{% endblock %}
+    </main>
+  </div>
 </div>
+<script>
+  (function () {
+    var b = document.body;
+    document.addEventListener('click', function (e) {
+      if (e.target.closest('[data-nav-open]')) b.classList.add('nav-open');
+      else if (e.target.closest('[data-nav-close]') || e.target.closest('.side a')) b.classList.remove('nav-open');
+    });
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape') b.classList.remove('nav-open'); });
+    function icons() { if (window.lucide) window.lucide.createIcons(); }
+    document.addEventListener('DOMContentLoaded', icons); window.addEventListener('load', icons);
+  })();
+</script>
 {% endblock %}
 <script>
   window.QSR_URLS = {

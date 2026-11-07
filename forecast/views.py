@@ -426,6 +426,7 @@ def model(request):
         rows.sort(key=lambda r: r['store'].pk)
     return page(request, 'model', 'model', info=adminops.model_info(), rows=Paginator(rows, 6).get_page(request.GET.get('page')),
                 selected=selected, bars=bars, sort=sort, store_choices=_store_choices(), service_date=plans.service_date_of(config),
+                products=Product.objects.order_by('menu_item_name'),
                 operating_date=config.operating_date)
 
 

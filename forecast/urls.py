@@ -45,6 +45,7 @@ urlpatterns = [
     path('api/admin/data/import/', api_admin.data_import, name='api_admin_import'),
     path('api/admin/forecast/run/', api_admin.run_store, name='api_admin_run'),
     path('api/admin/forecast/run-all/', api_admin.run_all, name='api_admin_run_all'),
+    path('api/admin/explain/', api_admin.explain_model, name='api_admin_explain'),
     path('api/admin/stores/save/', api_admin.save_store, name='api_admin_save_store'),
     path('api/admin/accounts/save/', api_admin.save_account, name='api_admin_save_account'),
     path('api/admin/accounts/disable/', api_admin.disable_account, name='api_admin_disable_account'),

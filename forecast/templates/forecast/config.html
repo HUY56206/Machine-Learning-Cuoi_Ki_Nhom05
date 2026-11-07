@@ -31,6 +31,8 @@
   </div>
   <section class="bg-white rounded-3xl p-5">
     <h2 class="text-base font-medium pb-2 border-b border-ink/10">Dự báo</h2>
+    <div class="flex items-center justify-between py-3 border-b border-ink/10"><div><div class="font-medium">Ngày vận hành</div><div class="text-ink/60">Hôm nay của hệ thống; dự báo cho ngày kế tiếp. Chọn 30/06/2025 – 30/12/2025.</div></div>
+      <input type="date" data-cfg="operating_date" value="{{ cfg.operating_date|date:'Y-m-d' }}" min="2025-06-30" max="2025-12-30" class="h-10 rounded-full border border-ink/15 bg-page px-4"></div>
     <div class="flex items-center justify-between py-3 border-b border-ink/10"><span class="font-medium">Tự lập đề xuất sau khi lưu kiểm kho</span>
       <label class="relative inline-flex cursor-pointer"><input type="checkbox" data-cfg="auto_plan_after_inventory" {% if cfg.auto_plan_after_inventory %}checked{% endif %} class="peer sr-only"><span class="w-12 h-7 rounded-full bg-ink/20 peer-checked:bg-ink transition"></span><span class="absolute top-0.5 left-0.5 w-6 h-6 rounded-full bg-white transition peer-checked:translate-x-5"></span></label></div>
     <div class="flex items-center justify-between py-3"><span class="font-medium">Cho phép quản lý bấm "Chạy dự báo"</span>

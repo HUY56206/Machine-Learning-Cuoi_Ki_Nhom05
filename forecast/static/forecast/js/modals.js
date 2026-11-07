@@ -694,7 +694,19 @@
       getJson('/api/line/' + d.line + '/reason/').then(function (res) {
         if (!res.ok || !card.isConnected) return;
         var host = $('.p-6', card);
-        host.insertAdjacentHTML('beforeend',
+        var shapHtml = '';
+        if (res.contrib && res.contrib.items && res.contrib.items.length) {
+          var mx = Math.max.apply(null, res.contrib.items.map(function (i) { return Math.abs(i.value); })) || 1;
+          shapHtml = '<h3 class="text-sm font-medium mt-4 mb-1">Mô hình dựa vào đâu để dự báo</h3>' +
+            '<div class="text-sm text-ink/70 mb-2">Mô hình bắt đầu từ ' + res.contrib.base + ' ' + esc(unit) + ' (mức bán thông thường), rồi cộng hoặc trừ theo từng yếu tố để ra ' + res.contrib.predicted + ' ' + esc(unit) + '.</div>' +
+            res.contrib.items.map(function (i) {
+              var up = i.value >= 0, w = Math.max(4, Math.round(Math.abs(i.value) / mx * 100));
+              return '<div class="flex items-center gap-3 text-sm py-1"><span class="w-[190px] text-ink/70">' + esc(i.label) + '</span>' +
+                '<span class="flex-1"><span class="block h-2 rounded-full ' + (up ? 'bg-forest' : 'bg-[#E5484D]') + '" style="width:' + w + '%"></span></span>' +
+                '<span class="w-24 text-right">' + (up ? 'tăng ' : 'giảm ') + String(Math.abs(i.value)).replace('.', ',') + '</span></div>';
+            }).join('');
+        }
+        host.insertAdjacentHTML('beforeend', shapHtml +
           '<h3 class="text-sm font-medium mt-4 mb-1">Yếu tố ảnh hưởng</h3>' + res.factors.map(function (f) {
             return '<div class="flex justify-between text-sm py-1"><span class="text-ink/60">' + esc(f[0]) + '</span><span>' + esc(f[1]) + '</span></div>';
           }).join('') +

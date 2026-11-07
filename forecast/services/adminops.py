@@ -3,7 +3,7 @@ import csv
 import io
 import re
 import secrets
-from datetime import datetime
+from datetime import date, datetime, timedelta
 from decimal import Decimal, InvalidOperation
 
 import pandas as pd
@@ -480,6 +480,16 @@ def save_config(data):
     for field in ('prep_deadline', 'inventory_reminder'):
         if data.get(field) not in CHOICES[field]:
             raise AdminError('invalid', f'Giá trị {field} không hợp lệ.')
+    if data.get('operating_date'):                                   # ngày vận hành: ngày dự báo (= +1) phải nằm trong khoảng cho phép
+        try:
+            day = date.fromisoformat(str(data['operating_date']))
+        except ValueError:
+            raise AdminError('invalid', 'Ngày vận hành không hợp lệ.')
+        first, last = plans.forecast_range()
+        if not (first - timedelta(days=1) <= day <= last - timedelta(days=1)):
+            raise AdminError('invalid', f'Ngày vận hành chỉ nhận từ {first - timedelta(days=1):%d/%m/%Y} đến {last - timedelta(days=1):%d/%m/%Y} '
+                                        f'(ngày dự báo {first:%d/%m/%Y} – {last:%d/%m/%Y}).')
+        cfg.operating_date = day
     cfg.service_level = level
     cfg.prep_deadline = datetime.strptime(data['prep_deadline'], '%H:%M').time()
     cfg.inventory_reminder = datetime.strptime(data['inventory_reminder'], '%H:%M').time()

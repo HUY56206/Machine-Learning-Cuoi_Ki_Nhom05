@@ -1,7 +1,11 @@
 """Giải thích dự báo của một món: yếu tố ảnh hưởng và những ngày tương tự trước đây."""
+import logging
 from datetime import timedelta
 
 from forecast.models import DailySale, Promotion, SystemConfig, WeatherEvent
+from forecast.services import explain
+
+logger = logging.getLogger(__name__)
 
 WEEKDAYS = ['Thứ Hai', 'Thứ Ba', 'Thứ Tư', 'Thứ Năm', 'Thứ Sáu', 'Thứ Bảy', 'Chủ nhật']
 
@@ -28,4 +32,9 @@ def line_insights(line, config=None):
             if sale:
                 similar.append({'date': d.strftime('%d/%m/%Y'), 'qty': sale.quantity})
         d -= timedelta(days=7)
-    return {'factors': factors, 'similar': similar}
+    try:                                                     # SHAP: lỗi (thiếu mô hình, mất kết nối…) thì popup vẫn hiện phần còn lại
+        contrib = explain.manager_view(plan.store_id, day, line.product_id)
+    except Exception:
+        logger.exception('Không tính được SHAP: %s %s %s', plan.store_id, day, line.product_id)
+        contrib = None
+    return {'factors': factors, 'similar': similar, 'contrib': contrib}

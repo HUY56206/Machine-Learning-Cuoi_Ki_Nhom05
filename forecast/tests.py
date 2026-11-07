@@ -14,7 +14,7 @@ from django.test import TestCase
 
 from forecast.models import (DailySale, Forecast, InventoryCount, Notification, PrepLine, PrepPlan, Product, Profile,
                              Promotion, Role, Store, SystemConfig, WeatherEvent)
-from forecast.services import engine, plans
+from forecast.services import engine, explain, plans
 
 UNMANAGED = [Store, Product, DailySale, WeatherEvent, Promotion, Forecast]
 OP_DATE = datetime.date(2025, 10, 30)
@@ -113,6 +113,19 @@ class PlanLogicTests(Base):
         self.assertEqual(plans.kitchen_plan(self.r01, SERVICE).pk, v2.pk)
         v1.refresh_from_db()
         self.assertEqual(v1.status, PrepPlan.Status.SUPERSEDED)
+
+    @mock.patch.object(engine, 'forecast_store', side_effect=fake_forecast)
+    def test_raw_forecasts_saved_only_after_commit(self, *_):
+        """Ghi bảng forecasts (kết nối riêng, khóa ngoại tới stores) phải chạy SAU khi giao dịch xong,
+        nếu không sẽ bị chặn bởi khóa dòng cửa hàng đến hết thời gian chờ (50 giây)."""
+        self.count(self.r01, {'M01': 5, 'M02': 5, 'M03': 5})
+        with mock.patch.object(engine, 'save_raw_forecasts', return_value=3) as saver:
+            with self.captureOnCommitCallbacks(execute=False) as callbacks:
+                plans.create_plan(self.r01, SERVICE, self.users['mgr1'])
+            self.assertEqual(saver.call_count, 0)                    # chưa ghi khi giao dịch còn mở
+            for cb in callbacks:
+                cb()
+            self.assertEqual(saver.call_count, 1)                    # ghi sau khi commit
 
     @mock.patch.object(engine, 'save_raw_forecasts', return_value=3)
     @mock.patch.object(engine, 'forecast_store', side_effect=fake_forecast)
@@ -354,7 +367,8 @@ class Phase1LogicTests(Base):
         self.assertEqual(self.client.get('/dashboard/').status_code, 403)
         self.assertEqual(self.post(self.client, '/api/forecast/run/').status_code, 403)
 
-    def test_reason_insights_endpoint(self):
+    @mock.patch.object(explain, 'store_explanation', side_effect=RuntimeError('no model'))
+    def test_reason_insights_endpoint(self, *_):
         plan = plans.create_plan(self.r01, SERVICE, self.mgr)
         DailySale.objects.create(sale_id=1, sale_date=SERVICE - datetime.timedelta(days=7), restaurant=self.r01,
                                  product_id='M01', quantity=70)
@@ -362,6 +376,7 @@ class Phase1LogicTests(Base):
         data = self.client.get(f'/api/line/{plan.lines.get(product_id="M01").pk}/reason/').json()
         self.assertTrue(data['ok'])
         self.assertEqual(data['similar'], [{'date': '24/10/2025', 'qty': 70}])
+        self.assertIsNone(data['contrib'])                                                     # SHAP lỗi: popup vẫn mở
         self.client.force_login(self.users['mgr2'])
         self.assertEqual(self.client.get(f'/api/line/{plan.lines.first().pk}/reason/').status_code, 404)
 
@@ -438,6 +453,17 @@ class AdminOpsTests(Base):
                     {'service_level': '95%', 'prep_deadline': '12:00', 'inventory_reminder': '22:00'}):
             with self.assertRaises(ops.AdminError):
                 ops.save_config(bad)
+
+    def test_config_operating_date(self):
+        import datetime as dt
+        ops = self.ops
+        base = {'service_level': '95%', 'prep_deadline': '09:00', 'inventory_reminder': '22:00'}
+        ops.save_config({**base, 'operating_date': '2025-12-12'})
+        self.assertEqual(plans.service_date_of(), dt.date(2025, 12, 13))
+        for bad in ('2025-06-29', '2025-12-31', 'abc'):
+            with self.assertRaises(ops.AdminError):
+                ops.save_config({**base, 'operating_date': bad})
+        self.assertEqual(SystemConfig.get().operating_date, dt.date(2025, 12, 12))
 
     # ---- nhập dữ liệu
     def csv(self, text):
@@ -631,3 +657,71 @@ class Round2SecurityTests(Base):
         with mock.patch.object(engine, 'trained_model', side_effect=RuntimeError('missing')):
             r = self.client.get('/admin-model/')
         self.assertContains(r, 'Không nạp được mô hình')
+
+
+FAKE_SHAP = (25.0, {pid: {'predicted': 70.0, 'values': {'roll_mean_28': 60.0, 'roll_mean_7': 65.0, 'is_promotion': 1, 'day_of_week_num': 4},
+                          'shap': {'roll_mean_28': 30.0, 'roll_mean_7': 10.0, 'is_promotion': 8.0, 'day_of_week_num': -3.0}}
+                     for pid in ('M01', 'M02', 'M03')})
+
+
+@mock.patch.object(explain, 'store_explanation', return_value=FAKE_SHAP)
+@mock.patch.object(engine, 'save_raw_forecasts', return_value=3)
+@mock.patch.object(engine, 'forecast_store', side_effect=fake_forecast)
+class ExplainTests(Base):
+    """SHAP: quản lý xem từng món (nhóm nghiệp vụ, cửa hàng mình); quản trị viên xem thêm tổng thể và mọi cửa hàng."""
+
+    def setUp(self):
+        super().setUp()
+        self.count(self.r01, {'M01': 5, 'M02': 5, 'M03': 5})
+
+    def line(self):
+        plan = plans.create_plan(self.r01, SERVICE, self.users['mgr1'])
+        return plan.lines.get(product_id='M01')
+
+    def test_manager_sees_business_groups(self, *_):
+        line = self.line()
+        self.client.force_login(self.users['mgr1'])
+        data = self.client.get(f'/api/line/{line.pk}/reason/').json()
+        labels = {i['label']: i['value'] for i in data['contrib']['items']}
+        self.assertEqual(labels['Lượng bán gần đây'], 40.0)                                  # roll_mean_28 + roll_mean_7
+        self.assertEqual(labels['Khuyến mãi'], 8.0)
+        self.assertEqual(labels['Thứ trong tuần'], -3.0)
+        self.assertNotIn('roll_mean_28', json.dumps(data['contrib']))                         # không lộ tên cột kỹ thuật
+
+    def test_manager_cannot_use_admin_explain_or_other_store(self, *_):
+        line = self.line()
+        self.client.force_login(self.users['mgr1'])
+        self.assertEqual(self.client.get('/api/admin/explain/?store=R01').status_code, 403)
+        self.client.force_login(self.users['mgr2'])
+        self.assertEqual(self.client.get(f'/api/line/{line.pk}/reason/').status_code, 404)
+
+    def test_staff_cannot_see_shap(self, *_):
+        line = self.line()
+        self.client.force_login(self.users['stf1'])
+        self.assertEqual(self.client.get(f'/api/line/{line.pk}/reason/').status_code, 403)
+        self.assertEqual(self.client.get('/api/admin/explain/?store=R01').status_code, 403)
+
+    def test_admin_sees_any_store_and_technical_detail(self, *_):
+        line = self.line()
+        self.client.force_login(self.users['adm'])
+        self.assertEqual(self.client.get(f'/api/line/{line.pk}/reason/').status_code, 200)    # mọi cửa hàng
+        data = self.client.get('/api/admin/explain/?store=R02&product=M01').json()
+        self.assertTrue(data['ok'], data)
+        self.assertEqual(data['importance_features'][0]['column'], 'roll_mean_28')            # tổng thể, tên cột kỹ thuật
+        self.assertEqual(data['importance_groups'][0]['label'], 'Lượng bán gần đây')
+        self.assertAlmostEqual(sum(g['share'] for g in data['importance_groups']), 100, delta=2)   # tỉ lệ % cộng lại ~100
+        self.assertTrue(data['item']['unit'])
+        self.assertEqual(data['item']['features'][0]['column'], 'roll_mean_28')               # chi tiết một món
+        self.assertEqual(data['item']['features'][0]['value'], '60')                          # số gốc làm tròn, không dài dòng
+
+    def test_admin_explain_validation(self, *_):
+        self.client.force_login(self.users['adm'])
+        self.assertEqual(self.client.get('/api/admin/explain/?store=ZZZ').status_code, 404)
+        self.assertEqual(self.client.get('/api/admin/explain/?store=R01&date=2024-03-15').json()['error'], 'out_of_range')
+        self.assertEqual(self.client.get('/api/admin/explain/?store=R01&product=XXX').status_code, 404)
+
+    def test_admin_model_page_has_shap_section_manager_does_not(self, *_):
+        self.client.force_login(self.users['adm'])
+        self.assertContains(self.client.get('/admin-model/'), 'id="shap-box"')
+        self.client.force_login(self.users['mgr1'])
+        self.assertEqual(self.client.get('/admin-model/').status_code, 403)

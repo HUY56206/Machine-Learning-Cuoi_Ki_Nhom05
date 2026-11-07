@@ -6,9 +6,10 @@ from django.http import JsonResponse
 from django.views.decorators.http import require_GET, require_POST
 
 from forecast.api import body, fail
-from forecast.models import Role, Store
+from forecast.models import Product, Role, Store
 from forecast.permissions import api_role_required
-from forecast.services import adminops, plans
+from forecast.services import adminops, explain, plans
+from forecast.services.engine import NoForecastData
 from forecast.services.adminops import AdminError
 from forecast.views import parse_date
 
@@ -79,6 +80,31 @@ def run_all(request):
     except Exception:
         logger.exception('Admin chạy dự báo toàn hệ thống lỗi')
         return fail('server_error', SERVER_ERROR, 500)
+
+
+# ----------------------------------------------------------------------------- giải thích mô hình (SHAP)
+@require_GET
+@api_role_required(ADMIN)
+def explain_model(request):
+    """Quản trị viên: mức ảnh hưởng của từng yếu tố tới dự báo của một cửa hàng (mọi cửa hàng), có thể chọn thêm một món."""
+    store = Store.objects.filter(pk=request.GET.get('store')).first()
+    if not store:
+        return fail('not_found', 'Không tìm thấy cửa hàng.', 404)
+    first, last = plans.forecast_range()
+    day = parse_date(request.GET.get('date'), plans.service_date_of())
+    if not (first <= day <= last):
+        return fail('out_of_range', f'Ngày chỉ nhận từ {first:%d/%m/%Y} đến {last:%d/%m/%Y}.')
+    product = request.GET.get('product') or None
+    if product and not Product.objects.filter(pk=product).exists():
+        return fail('not_found', 'Không tìm thấy món.', 404)
+    try:
+        data = explain.admin_view(store.pk, day, product)
+    except NoForecastData:
+        return fail('no_data', 'Không có dữ liệu đầu vào cho ngày đã chọn.')
+    except Exception:
+        logger.exception('Admin SHAP lỗi: %s %s', store.pk, day)
+        return fail('server_error', 'Không thể tính mức ảnh hưởng do lỗi hệ thống · Thử lại sau ít phút.', 500)
+    return JsonResponse({'ok': True, 'store': store.pk, 'date': day.isoformat(), **data})
 
 
 # ----------------------------------------------------------------------------- cửa hàng

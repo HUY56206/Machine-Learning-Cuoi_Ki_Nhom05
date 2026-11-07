@@ -1,4 +1,5 @@
 """Nghiệp vụ đề xuất chuẩn bị hàng & kiểm kho (không phụ thuộc HTTP, dễ kiểm thử)."""
+import logging
 import math
 from datetime import date, timedelta
 
@@ -10,6 +11,8 @@ from forecast.models import (InventoryCount, InventoryItem, Notification, PrepLi
 from forecast.services import engine
 from forecast.services.notifications import notify
 from Utils import Config
+
+logger = logging.getLogger(__name__)
 
 
 class PlanError(Exception):
@@ -161,10 +164,10 @@ def create_plan(store, service_date, user, config=None):
         raw_need.append(need)
     PrepLine.objects.bulk_create(lines)
 
-    try:                                          # ghi bảng forecasts cũ; lỗi ở đây không làm hỏng đề xuất
-        engine.save_raw_forecasts(df, raw_stock, raw_need)
-    except Exception:
-        pass
+    # Ghi bảng forecasts cũ SAU khi giao dịch hoàn tất: hàm này mở kết nối MySQL riêng, mà bảng forecasts có khóa ngoại
+    # tới stores; nếu ghi ngay trong giao dịch đang giữ khóa dòng cửa hàng (select_for_update ở trên) thì kết nối kia
+    # bị chặn đến hết thời gian chờ khóa (50 giây). Lỗi ở đây không làm hỏng đề xuất.
+    transaction.on_commit(lambda: _save_raw_forecasts(df, raw_stock, raw_need))
 
     if config.require_approval:
         notify(Notification.Kind.PLAN, Role.STAFF, store, 'Danh sách chuẩn bị đang chờ duyệt',
@@ -180,6 +183,13 @@ def create_plan(store, service_date, user, config=None):
         notify(Notification.Kind.EVENT, Role.MANAGER, store, f'Sự kiện: {event.special_event_name or event.holiday_name}',
                 f'Ngày phục vụ: {service_date:%d/%m/%Y}', 'forecast')
     return plan
+
+
+def _save_raw_forecasts(df, raw_stock, raw_need):
+    try:
+        engine.save_raw_forecasts(df, raw_stock, raw_need)
+    except Exception:
+        logger.exception('Không ghi được bảng forecasts (đề xuất vẫn được tạo)')
 
 
 # ----------------------------------------------------------------------------- điều chỉnh / duyệt

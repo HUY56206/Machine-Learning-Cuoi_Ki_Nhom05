@@ -142,9 +142,14 @@ def reopen_plan(request, plan_id):
 
 # ----------------------------------------------------------------------------- nhân viên
 @require_GET
-@api_role_required(MANAGER)
+@api_role_required(MANAGER, ADMIN)
 def line_reason(request, line_id):
-    line = get_object_or_404(PrepLine.objects.select_related('plan', 'product'), pk=line_id, plan__store=request.user.profile.store)
+    """Lý do dự báo của một món. Quản lý chỉ xem món của cửa hàng mình; quản trị viên xem được mọi cửa hàng."""
+    lines = PrepLine.objects.select_related('plan', 'product')
+    if request.user.profile.role == ADMIN:
+        line = get_object_or_404(lines, pk=line_id)
+    else:
+        line = get_object_or_404(lines, pk=line_id, plan__store=request.user.profile.store)
     return JsonResponse({'ok': True, **insights.line_insights(line)})
 
 

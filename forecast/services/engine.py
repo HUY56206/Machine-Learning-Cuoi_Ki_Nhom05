@@ -112,3 +112,40 @@ def accuracy_by_day(store_id, start, end):
         return out
     finally:
         connector.disConnect()
+
+
+def explain_store(store_id, service_date):
+    """TreeSHAP (CatBoost) cho mọi món của một cửa hàng trong một ngày.
+
+    Trả về (base, rows): base = mức nền của mô hình; rows[menu_item_id] = {'predicted', 'values': {cột: giá trị},
+    'shap': {cột: đóng góp}}. Tổng base + các đóng góp = dự báo thô của mô hình (trước khi chặn ≥ 0)."""
+    from catboost import Pool
+    tm = trained_model()
+    connector = Connector()
+    if not connector.connect():
+        raise RuntimeError('Không kết nối được MySQL')
+    try:
+        model = QSRMLModel(connector)
+        model.trainedmodel = tm
+        model.model_name = tm.model_name
+        day = pd.Timestamp(service_date)
+        df = model.execQSRHistory(restaurant_id=store_id, start=(day - pd.Timedelta(days=HISTORY_DAYS)).date(),
+                                  end=(day + pd.Timedelta(days=1)).date())
+        if df is None or df.empty or day not in set(df[Config.DATE_COL]):
+            raise NoForecastData(str(day.date()))
+        model.processFeatures()
+        part = model.df_features[(model.df_features[Config.DATE_COL] == day) & (model.df_features['restaurant_id'] == store_id)]
+        if part.empty:
+            raise NoForecastData(str(day.date()))
+        X = model.prepareX(part)
+        cats = [c for c in X.columns if c in tm.categorical_columns]
+        sv = tm.model.get_feature_importance(Pool(X, cat_features=cats), type='ShapValues')   # cột cuối = mức nền
+    finally:
+        connector.disConnect()
+    cols = list(X.columns)
+    rows = {}
+    for i, pid in enumerate(part['menu_item_id'].tolist()):
+        shap = {c: float(sv[i, k]) for k, c in enumerate(cols)}
+        rows[pid] = {'predicted': float(sv[i].sum()), 'shap': shap,
+                     'values': {c: (None if pd.isna(X.iloc[i][c]) else X.iloc[i][c]) for c in cols}}
+    return float(sv[0, -1]), rows
