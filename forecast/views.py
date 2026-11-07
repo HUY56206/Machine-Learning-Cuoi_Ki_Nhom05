@@ -26,6 +26,7 @@ from forecast.services.units import unit_for
 MANAGER, STAFF, ADMIN = Role.MANAGER, Role.STAFF, Role.ADMIN
 PAGE_SIZE = 5
 LOGIN_MAX_FAILS, LOGIN_LOCK_SECONDS = 5, 15 * 60
+LOGIN_SUGGESTIONS = ('lan.r01', 'khanh.r01', 'admin')                 # 3 tài khoản mẫu hiện ở ô đăng nhập
 
 
 # ----------------------------------------------------------------------------- tiện ích
@@ -44,9 +45,18 @@ def page(request, template, active, **ctx):
 
 
 def attach_units(lines):
+    """Gắn đơn vị và dự báo đã áp tỷ lệ điều chỉnh của đề xuất (để Dự báo + Tồn an toàn − Tồn = Cần chuẩn bị)."""
     for ln in lines:
         ln.unit = unit_for(ln.product)
+        ln.fc_adjusted = plans.adjusted_forecast(ln.forecast_qty, ln.plan.adjustment_pct)
     return lines
+
+
+def _plan_total(plan):
+    """Tổng dự báo (đã điều chỉnh %) của một đề xuất; None nếu chưa có."""
+    if plan is None:
+        return None
+    return round(sum(l.forecast_qty for l in plan.lines.all()) * (1 + plan.adjustment_pct / 100))
 
 
 # ----------------------------------------------------------------------------- đăng nhập / chung
@@ -70,8 +80,10 @@ def login_view(request):
         return JsonResponse({'ok': True, 'next': target or reverse(HOME[user.profile.role])})
     if request.user.is_authenticated and hasattr(request.user, 'profile'):
         return redirect(HOME[request.user.profile.role])
+    # Chỉ gợi ý vài tài khoản mẫu (không liệt kê mọi tên đăng nhập); tên khác người dùng tự gõ.
     accounts = [{'value': p.user.username, 'label': f'{p.user.username} · {p.get_role_display()}'}
-                for p in Profile.objects.select_related('user').filter(user__is_active=True).order_by('role', 'user__username')]
+                for p in Profile.objects.select_related('user').filter(user__is_active=True, user__username__in=LOGIN_SUGGESTIONS)
+                .order_by('role', 'user__username')]
     return render(request, 'forecast/login.html', {'accounts': accounts, 'accounts_json': json.dumps(accounts, ensure_ascii=False),
                                                    'next': request.GET.get('next', '')})
 
@@ -115,11 +127,13 @@ def dashboard(request):
     days = [day - timedelta(days=i) for i in range(6, 0, -1)]
     actual = dict(DailySale.objects.filter(restaurant=store, sale_date__in=[d for d in days if d <= config.operating_date])
                   .values('sale_date').annotate(t=Sum('quantity')).values_list('sale_date', 't'))
-    bars = [{'label': d, 'value': actual.get(d), 'forecast': False} for d in days]
-    forecast_total = None
-    if plan:
-        forecast_total = round(sum(l.forecast_qty for l in plan.lines.all()) * (1 + plan.adjustment_pct / 100))
-    bars.append({'label': day, 'value': forecast_total, 'forecast': True})
+    bars = []
+    for d in days:                         # ngày sau ngày vận hành chưa có số bán thật -> dùng dự báo đã chạy (nếu có)
+        if d <= config.operating_date:
+            bars.append({'label': d, 'value': actual.get(d), 'forecast': False})
+        else:
+            bars.append({'label': d, 'value': _plan_total(plans.working_plan(store, d)), 'forecast': True})
+    bars.append({'label': day, 'value': _plan_total(plan), 'forecast': True})
     top = max([b['value'] or 0 for b in bars] + [1])
     for b in bars:
         b['height'] = round((b['value'] or 0) / top * 100)
@@ -160,7 +174,8 @@ def prep(request):
         lines_page = Paginator(qs, PAGE_SIZE).get_page(request.GET.get('page'))
         attach_units(lines_page.object_list)
     return page(request, 'prep', 'prep', day=day, plan=plan, level=level, counts=counts, lines=lines_page, config=config,
-                locked=plans.is_locked(plan, config), complete=bool(plan and plans.is_complete(plan)))
+                locked=plans.is_locked(plan, config), complete=bool(plan and plans.is_complete(plan)),
+                reopened=bool(plan and plan.status == PrepPlan.Status.APPROVED and plan.reopened_at))
 
 
 @role_required(MANAGER)
@@ -171,11 +186,11 @@ def prep_export(request):
     response['Content-Disposition'] = f'attachment; filename="chuan_bi_{store.pk}_{day:%Y%m%d}.csv"'
     response.write('﻿')                                          # BOM để Excel đọc đúng tiếng Việt
     w = csv.writer(response)
-    w.writerow(['Món', 'Đơn vị', 'Dự báo', 'Tồn an toàn', 'Tồn hiện tại', 'Cần chuẩn bị', 'Trạng thái'])
+    w.writerow(['Món', 'Đơn vị', 'Dự báo', 'Tồn an toàn', 'Tồn hiện tại', 'Cần chuẩn bị', 'Đề xuất gốc', 'Trạng thái'])
     if plan:
-        for ln in attach_units(list(plan.lines.select_related('product'))):
-            w.writerow([ln.product.menu_item_name, ln.unit, ln.forecast_qty, ln.safety_stock, ln.current_stock,
-                        ln.applied_qty, ln.get_level_display()])
+        for ln in attach_units(list(plan.lines.select_related('product', 'plan'))):
+            w.writerow([ln.product.menu_item_name, ln.unit, ln.fc_adjusted, ln.safety_stock, ln.current_stock,
+                        ln.applied_qty, ln.need_qty, ln.get_level_display()])
     return response
 
 
@@ -201,7 +216,7 @@ def forecast(request):
         lines_page = Paginator(qs, PAGE_SIZE).get_page(request.GET.get('page'))
         for ln in attach_units(lines_page.object_list):
             adj = ln.forecast_qty * (1 + plan.adjustment_pct / 100)
-            ln.shown = round(adj)
+            ln.shown = ln.fc_adjusted
             ln.diff = round((adj - ln.baseline_qty) / ln.baseline_qty * 100) if ln.baseline_qty else 0
 
     weather = WeatherEvent.objects.filter(restaurant=store, event_date=day).first()

@@ -7,7 +7,8 @@
 
 <section class="bg-white border border-ink/10 rounded-xl p-5 mb-4 text-sm leading-7">
   <h2 class="text-lg font-medium mb-1">Thông tin mô hình</h2>
-  <p>{{ info.name|title }} · {{ info.file }} · Huấn luyện đến {{ info.trained_until|slice:"8:10" }}/{{ info.trained_until|slice:"5:7" }}/{{ info.trained_until|slice:":4" }}</p>
+  {% if info.missing %}<p class="text-[#9B1C1C]">Không nạp được mô hình {{ info.file }} · Kiểm tra tệp Assets/{{ info.file }} rồi tải lại trang.</p>{% else %}
+  <p>{{ info.name|title }} · {{ info.file }} · Huấn luyện đến {{ info.trained_until|slice:"8:10" }}/{{ info.trained_until|slice:"5:7" }}/{{ info.trained_until|slice:":4" }}</p>{% endif %}
   <p class="text-xs">Đánh giá ngoại tuyến · 15 cửa hàng · {{ info.test_range }}</p>
   {% if info.wmape %}<p>wMAPE: {{ info.wmape|floatformat:1 }}% · Seasonal Naive: {{ info.naive|floatformat:1 }}% · Giảm sai số khoảng {{ info.gain|floatformat:1 }}%</p>{% endif %}
   <p class="text-xs">Kết quả tập test phục vụ báo cáo nghiên cứu; dữ liệu vận hành demo chỉ đến {{ operating_date|dm }}.</p>

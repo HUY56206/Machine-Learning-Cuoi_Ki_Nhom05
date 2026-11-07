@@ -20,7 +20,7 @@
   <a href="{% url 'forecast:inventory' %}" class="inline-flex items-center h-10 px-5 rounded-full border border-ink/25 bg-white font-medium">Mở kiểm kho</a>
   {% else %}
   {% if complete %}<span class="inline-block px-3 py-1 rounded-full bg-mint text-forest font-medium mb-3">Hoàn thành</span>{% endif %}
-  <p class="mb-3">Đã duyệt · {{ plan.approved_by.first_name|default:plan.approved_by.username }} · {{ plan.approved_at|date:"d/m/Y H:i" }}</p>
+  <p class="mb-3">{% if plan.approved_by %}Đã duyệt · {{ plan.approved_by.first_name|default:plan.approved_by.username }}{% else %}Tự động gửi bếp (không cần quản lý duyệt){% endif %} · {{ plan.approved_at|date:"d/m/Y H:i" }}</p>
   <p class="mb-3">Ngày phục vụ: {{ day|dm }} <span class="ml-3">Đã xong <b class="text-lg font-normal mx-1">{{ done|length }}</b>/{{ total_lines }} · Hạn: {{ config.prep_deadline|time:"H:i" }}</span></p>
   <p class="text-xs mb-3">1 ly = nguyên liệu cho 1 ly (cốc + siro)</p>
   <p class="mb-5">Tổng số lượng đã chốt: <span class="text-xl mx-1">{{ total_qty|thousands }}</span> phần</p>

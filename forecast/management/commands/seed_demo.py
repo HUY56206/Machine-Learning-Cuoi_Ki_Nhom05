@@ -2,6 +2,7 @@
 
     python manage.py seed_demo            # tạo tài khoản cho toàn bộ 15 cửa hàng (mật khẩu riêng từng tài khoản)
     python manage.py seed_demo --no-plan  # không chạy dự báo mẫu
+    python manage.py seed_demo --reset    # xóa mọi đề xuất, kiểm kho, thông báo và đưa cấu hình về mặc định trước khi tạo lại
 Chạy lại được nhiều lần (idempotent).
 """
 import random
@@ -12,7 +13,8 @@ from django.core.management.base import BaseCommand
 from django.db.models import Avg
 from django.utils import timezone
 
-from forecast.models import (DailySale, InventoryCount, InventoryItem, PrepPlan, Product, Profile, Role, Store, SystemConfig)
+from forecast.models import (DailySale, InventoryCount, InventoryItem, Notification, PrepPlan, Product, Profile, Role, Store,
+                             SystemConfig)
 from forecast.services import adminops, plans
 
 ACCOUNTS = [
@@ -58,8 +60,12 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser):
         parser.add_argument('--no-plan', action='store_true', help='Không chạy dự báo để tạo đề xuất chờ duyệt.')
+        parser.add_argument('--reset', action='store_true',
+                            help='Xóa mọi đề xuất, kiểm kho, thông báo và đưa cấu hình về mặc định (dữ liệu bán hàng giữ nguyên).')
 
     def handle(self, *args, **opts):
+        if opts['reset']:
+            self._reset()
         config = SystemConfig.get()
         self.stdout.write(f'Ngày vận hành: {config.operating_date:%d/%m/%Y}')
 
@@ -85,6 +91,17 @@ class Command(BaseCommand):
                 self.stdout.write(self.style.SUCCESS(f'Đề xuất R01 {day:%d/%m/%Y}: {plan.lines.count()} món, chờ duyệt'))
         self.stdout.write(f'Dòng thiếu số lượng: {adminops.refresh_data_notification(config):,}')
         self.stdout.write(self.style.SUCCESS('Xong.'))
+
+    def _reset(self):
+        """Đưa phần dữ liệu web về trạng thái ban đầu; không đụng bảng dữ liệu ML (bán hàng, thời tiết, khuyến mãi…)."""
+        plans_n = PrepPlan.objects.count()
+        counts_n = InventoryCount.objects.count()
+        PrepPlan.objects.all().delete()
+        InventoryCount.objects.all().delete()
+        Notification.objects.all().delete()
+        SystemConfig.objects.filter(pk=1).delete()                  # SystemConfig.get() tạo lại với giá trị mặc định
+        SystemConfig.get()
+        self.stdout.write(self.style.WARNING(f'Đã xóa {plans_n} đề xuất, {counts_n} lần kiểm kho và mọi thông báo; cấu hình về mặc định.'))
 
     def _seed_inventory(self, store, user, config):
         """Tồn mô phỏng = 0,2–1,1 lần bán trung bình 7 ngày (dataset không có tồn kho thực tế)."""

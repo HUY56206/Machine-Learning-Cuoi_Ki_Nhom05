@@ -77,19 +77,35 @@ def level_of(need, current, safety):
     return PrepLine.Level.SHORT if current < safety else PrepLine.Level.TOPUP
 
 
+ADJUSTMENT_LEVELS = (-30, -15, 0, 15, 30)
+
+
+def adjusted_forecast(forecast, pct=0):
+    """Dự báo sau điều chỉnh %, làm tròn về số nguyên (0,5 làm tròn lên) – cùng một số ở mọi màn hình.
+    Tính bằng số nguyên để tránh sai số dấu phẩy động (50 × 1,15 = 57,5 → 58, không ra 57)."""
+    return (int(forecast) * (100 + int(pct)) + 50) // 100
+
+
 def compute_line(forecast, safety, current, pct=0):
-    """Dự báo đã điều chỉnh + tồn an toàn − tồn hiện tại (không âm, làm tròn lên)."""
-    adjusted = forecast * (1 + pct / 100)
-    need = max(0, math.ceil(adjusted + safety - current))
+    """Dự báo đã điều chỉnh (làm tròn) + tồn an toàn − tồn hiện tại, không âm: người xem tự cộng ra đúng số."""
+    need = max(0, adjusted_forecast(forecast, pct) + safety - current)
     return need, level_of(need, current, safety)
 
 
+def is_manual(line):
+    """Quản lý đã chỉnh tay số lượng của dòng (khác số hệ thống tính)."""
+    return line.applied_qty != line.need_qty
+
+
 def recalc_plan(plan):
-    """Áp tỷ lệ điều chỉnh của đề xuất lên mọi dòng (giữ nguyên số quản lý chỉnh tay nếu khác tính toán)."""
+    """Áp tỷ lệ điều chỉnh của đề xuất lên mọi dòng; dòng quản lý đã chỉnh tay giữ nguyên số đã chỉnh."""
     lines = list(plan.lines.all())
     for ln in lines:
+        manual = is_manual(ln)
         need, level = compute_line(ln.forecast_qty, ln.safety_stock, ln.current_stock, plan.adjustment_pct)
-        ln.need_qty, ln.applied_qty, ln.level = need, need, level
+        ln.need_qty, ln.level = need, level
+        if not manual:
+            ln.applied_qty = need
     PrepLine.objects.bulk_update(lines, ['need_qty', 'applied_qty', 'level'])
 
 
@@ -102,7 +118,10 @@ def create_plan(store, service_date, user, config=None):
         raise PlanError('train_data', f'Ngày {service_date:%d/%m/%Y} thuộc dữ liệu huấn luyện của mô hình, '
                                       f'không dự báo. Chọn ngày từ {first:%d/%m/%Y} đến {last:%d/%m/%Y}.')
     # Ngày sau khoảng này (hoặc không có dữ liệu đầu vào trong DB) sẽ báo no_data từ engine.
-    current = working_plan(store, service_date)
+    # Khóa dòng cửa hàng tới hết giao dịch: hai người cùng bấm chạy thì lần lượt, không trùng số phiên bản.
+    Store.objects.select_for_update().filter(pk=store.pk).first()
+    current = (PrepPlan.objects.select_for_update().filter(store=store, service_date=service_date)
+               .exclude(status=PrepPlan.Status.SUPERSEDED).order_by('-version').first())
     if is_locked(current, config):
         raise PlanError('approved', 'Danh sách đã duyệt – cần mở lại trước khi chạy lại dự báo.')
 
@@ -117,22 +136,27 @@ def create_plan(store, service_date, user, config=None):
 
     stock = {i.product_id: i.quantity for i in inv.items.all() if i.quantity is not None}
     products = {p.pk: p for p in Product.objects.all()}
-    version = (PrepPlan.objects.filter(store=store, service_date=service_date).order_by('-version')
+    version = (PrepPlan.objects.select_for_update().filter(store=store, service_date=service_date).order_by('-version')
                .values_list('version', flat=True).first() or 0) + 1
     if current:                                   # bản chờ duyệt cũ bị thay thế
         PrepPlan.objects.filter(store=store, service_date=service_date,
                                 status=PrepPlan.Status.PENDING).update(status=PrepPlan.Status.SUPERSEDED)
 
+    # Bản mới giữ điều chỉnh % và các món quản lý đã chỉnh tay ở bản đang làm việc (chạy lại không làm mất số đã sửa).
+    pct, reason = (current.adjustment_pct, current.adjustment_reason) if current else (0, '')
+    manual = {l.product_id: l.applied_qty for l in current.lines.all() if is_manual(l)} if current else {}
     plan = PrepPlan.objects.create(store=store, service_date=service_date, version=version,
-                                   model_name=df['model_name'].iloc[0], inventory_count=inv, created_by=user)
+                                   model_name=df['model_name'].iloc[0], inventory_count=inv, created_by=user,
+                                   adjustment_pct=pct, adjustment_reason=reason)
     lines, raw_stock, raw_need = [], [], []
     for r in df.itertuples(index=False):
         fc, safe = round(r.predicted_qty), math.ceil(r.safety_stock)
         cur = stock.get(r.menu_item_id, 0)
-        need, level = compute_line(fc, safe, cur)
+        need, level = compute_line(fc, safe, cur, pct)
         lines.append(PrepLine(plan=plan, product=products[r.menu_item_id], forecast_qty=fc,
                               baseline_qty=round(r.baseline_qty) if r.baseline_qty == r.baseline_qty else 0,
-                              safety_stock=safe, current_stock=cur, need_qty=need, applied_qty=need, level=level))
+                              safety_stock=safe, current_stock=cur, need_qty=need,
+                              applied_qty=manual.get(r.menu_item_id, need), level=level))
         raw_stock.append(cur)
         raw_need.append(need)
     PrepLine.objects.bulk_create(lines)
@@ -145,8 +169,8 @@ def create_plan(store, service_date, user, config=None):
     if config.require_approval:
         notify(Notification.Kind.PLAN, Role.STAFF, store, 'Danh sách chuẩn bị đang chờ duyệt',
                 f'Ngày phục vụ: {service_date:%d/%m/%Y}', 'staff_prep')
-    else:                                                     # không cần duyệt: gửi bếp ngay
-        _publish(plan, user)
+    else:                                                     # không cần duyệt: gửi bếp ngay, không ghi ai là người duyệt
+        _publish(plan, None)
     short = sum(1 for l in lines if l.level == PrepLine.Level.SHORT)
     if config.alert_red:
         notify(Notification.Kind.SHORTAGE, Role.MANAGER, store, f'Thiếu hàng: {short} món',
@@ -163,8 +187,8 @@ def create_plan(store, service_date, user, config=None):
 def set_adjustment(plan, pct, reason):
     if plan.status != PrepPlan.Status.PENDING:
         raise PlanError('not_pending', 'Chỉ điều chỉnh được đề xuất đang chờ duyệt.')
-    if not -30 <= pct <= 30:
-        raise PlanError('invalid', 'Tỷ lệ điều chỉnh nằm trong khoảng −30% … +30%.')
+    if pct not in ADJUSTMENT_LEVELS:
+        raise PlanError('invalid', 'Tỷ lệ điều chỉnh chỉ nhận −30%, −15%, 0%, +15% hoặc +30%.')
     if pct != 0 and not reason.strip():
         raise PlanError('reason_required', 'Cần nhập lý do điều chỉnh.')
     plan.adjustment_pct, plan.adjustment_reason = pct, reason.strip()

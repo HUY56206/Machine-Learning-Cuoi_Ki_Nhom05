@@ -252,7 +252,10 @@ def commit_import(group, mode, filename, raw):
 
 # ============================================================================ Dự báo & Mô hình (QTV-2)
 def model_info():
-    tm = engine.trained_model()
+    try:
+        tm = engine.trained_model()
+    except Exception:                         # thiếu/hỏng best_model.joblib: trang vẫn mở, báo thiếu mô hình
+        return {'name': None, 'file': engine.MODEL_FILE, 'missing': True}
     metrics = {}
     try:
         df = pd.read_csv(Config.REPORTS_DIR / 'metrics.csv')

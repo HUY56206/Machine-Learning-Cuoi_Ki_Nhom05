@@ -8,7 +8,7 @@
     <h1 class="text-[28px] font-medium">Dự báo nhu cầu</h1>
     <p class="text-sm text-ink/70">Mô hình dự báo 1 ngày tới · áp cùng tỷ lệ điều chỉnh cho mọi món</p>
   </div>
-  <button type="button" data-act="prep-run" data-date="{{ day|dm }}" class="h-11 px-6 rounded-full bg-ink text-white text-sm font-medium">Tạo đề xuất chuẩn bị</button>
+  <button type="button" data-act="prep-run" data-date="{{ day|dm }}" {% if locked or not config.managers_can_run %}disabled title="{% if locked %}Danh sách đã duyệt – mở lại ở trang Chuẩn bị hàng để chạy lại{% else %}Quản trị viên đã tắt quyền chạy dự báo của quản lý{% endif %}"{% endif %} class="h-11 px-6 rounded-full bg-ink text-white text-sm font-medium disabled:opacity-40 disabled:cursor-not-allowed">Tạo đề xuất chuẩn bị</button>
 </div>
 
 <form method="get" data-submit="view-forecast" class="flex items-center gap-3 mb-5 text-sm">

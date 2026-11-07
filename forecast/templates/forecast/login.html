@@ -22,10 +22,11 @@
 
       <label for="username" class="block text-sm text-ink/70 mb-2">Tên đăng nhập</label>
       <div class="relative mb-5">
-        <select id="username" name="username" data-choice="accounts" class="appearance-none w-full h-11 rounded-xl border-2 border-ink px-4 text-sm bg-white focus:outline-none">
-          {% for a in accounts %}<option value="{{ a.value }}">{{ a.value }}</option>{% endfor %}
-        </select>
-        <svg class="w-4 h-4 absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 9l6 6 6-6"/></svg>
+        <input id="username" name="username" type="text" list="demo-accounts" autocomplete="username" autocapitalize="none" spellcheck="false"
+               placeholder="Nhập hoặc chọn tài khoản mẫu" class="w-full h-11 rounded-xl border-2 border-ink px-4 text-sm bg-white focus:outline-none">
+        <datalist id="demo-accounts">
+          {% for a in accounts %}<option value="{{ a.value }}">{{ a.label }}</option>{% endfor %}
+        </datalist>
       </div>
 
       <label for="password" class="block text-sm text-ink/70 mb-2">Mật khẩu</label>

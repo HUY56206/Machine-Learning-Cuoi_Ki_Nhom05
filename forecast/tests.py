@@ -120,15 +120,17 @@ class PlanLogicTests(Base):
         self.count(self.r01, {'M01': 5, 'M02': 30, 'M03': 100})
         plan = plans.create_plan(self.r01, SERVICE, self.users['mgr1'])
         with self.assertRaises(plans.PlanError):                                              # khác 0% bắt buộc có lý do
-            plans.set_adjustment(plan, 10, '')
+            plans.set_adjustment(plan, 15, '')
         with self.assertRaises(plans.PlanError):
             plans.set_adjustment(plan, 50, 'Sự kiện')
-        plans.set_adjustment(plan, 10, 'Sự kiện tại cửa hàng')
+        with self.assertRaises(plans.PlanError):                                              # chỉ 5 mức −30/−15/0/+15/+30
+            plans.set_adjustment(plan, 10, 'Sự kiện')
+        plans.set_adjustment(plan, 15, 'Sự kiện tại cửa hàng')
         m01 = plan.lines.get(product_id='M01')
-        self.assertEqual(m01.need_qty, 125)                                                   # ceil(110+20-5)
-        plans.set_line_qty(m01, 130)
+        self.assertEqual(m01.need_qty, 130)                                                   # 115+20-5
+        plans.set_line_qty(m01, 140)
         m01.refresh_from_db()
-        self.assertEqual((m01.need_qty, m01.applied_qty), (125, 130))
+        self.assertEqual((m01.need_qty, m01.applied_qty), (130, 140))
         plans.approve(plan, self.users['mgr1'])
         with self.assertRaises(plans.PlanError):                                              # đã duyệt -> không sửa
             plans.set_line_qty(m01, 1)
@@ -228,7 +230,7 @@ class PermissionTests(Base):
         run = self.post(self.client, '/api/forecast/run/', {'date': '31/10/2025'}).json()
         self.assertTrue(run['ok'])
         pid = run['plan']['id']
-        self.assertEqual(self.post(self.client, f'/api/plan/{pid}/adjust/', {'pct': 10, 'reason': ''}).json()['error'], 'reason_required')
+        self.assertEqual(self.post(self.client, f'/api/plan/{pid}/adjust/', {'pct': 15, 'reason': ''}).json()['error'], 'reason_required')
         self.assertTrue(self.post(self.client, f'/api/plan/{pid}/approve/').json()['ok'])
         again = self.post(self.client, '/api/forecast/run/', {'date': '31/10/2025'})
         self.assertEqual((again.status_code, again.json()['error'], again.json()['plan_id']), (409, 'approved', pid))
@@ -523,3 +525,109 @@ class AdminOpsTests(Base):
         self.assertEqual((dup.status_code, dup.json()['error']), (409, 'duplicate'))
         self.assertTrue(self.post(self.client, '/api/admin/config/save/', {'service_level': '90%', 'prep_deadline': '11:00', 'inventory_reminder': '20:00'}).json()['ok'])
         self.assertEqual(SystemConfig.get().service_level, 90)
+
+
+class Round2FixTests(Base):
+    """Các lỗi tìm ra ở lượt kiểm thử 2 (mã lỗi theo báo cáo kiểm thử lượt 2)."""
+
+    def setUp(self):
+        super().setUp()
+        self.count(self.r01, {'M01': 5, 'M02': 30, 'M03': 100})
+        self.mgr = self.users['mgr1']
+        for p in (mock.patch.object(engine, 'forecast_store', side_effect=fake_forecast),
+                  mock.patch.object(engine, 'save_raw_forecasts', return_value=3)):
+            p.start()
+            self.addCleanup(p.stop)
+
+    def test_rerun_keeps_adjustment_and_manual_edits(self):                                      # L3, L9
+        v1 = plans.create_plan(self.r01, SERVICE, self.mgr)
+        plans.set_adjustment(v1, 15, 'Khuyến mãi')
+        plans.set_line_qty(v1.lines.get(product_id='M02'), 99)
+        v2 = plans.create_plan(self.r01, SERVICE, self.mgr)
+        self.assertEqual((v2.version, v2.adjustment_pct, v2.adjustment_reason), (2, 15, 'Khuyến mãi'))
+        m01, m02 = v2.lines.get(product_id='M01'), v2.lines.get(product_id='M02')
+        self.assertEqual(m01.applied_qty, 130)                                                    # 115+20-5, đã áp +15%
+        self.assertEqual((m02.need_qty, m02.applied_qty), (38, 99))                               # 58+10-30; giữ số sửa tay
+
+    def test_rerun_after_staff_recount_keeps_manual_edit(self):                                   # L3
+        v1 = plans.create_plan(self.r01, SERVICE, self.mgr)
+        plans.set_line_qty(v1.lines.get(product_id='M01'), 100)
+        _, v2 = plans.save_inventory(self.r01, OP_DATE, self.users['stf1'], {'M01': 0, 'M02': 30, 'M03': 100}, draft=False)
+        m01 = v2.lines.get(product_id='M01')
+        self.assertEqual((m01.need_qty, m01.applied_qty), (120, 100))
+
+    def test_adjustment_keeps_manual_edit(self):                                                  # L10
+        plan = plans.create_plan(self.r01, SERVICE, self.mgr)
+        plans.set_line_qty(plan.lines.get(product_id='M01'), 160)
+        plans.set_adjustment(plan, 30, 'Sự kiện tại cửa hàng')
+        m01, m02 = plan.lines.get(product_id='M01'), plan.lines.get(product_id='M02')
+        self.assertEqual((m01.need_qty, m01.applied_qty), (145, 160))                             # 130+20-5; giữ 160
+        self.assertEqual(m02.applied_qty, 45)                                                     # 65+10-30, tính lại theo %
+
+    def test_prep_page_shows_adjusted_forecast(self):                                             # L11
+        plan = plans.create_plan(self.r01, SERVICE, self.mgr)
+        plans.set_adjustment(plan, 30, 'Sự kiện tại cửa hàng')
+        self.client.force_login(self.mgr)
+        self.assertContains(self.client.get('/prep/?date=31/10/2025&level=all'), 'data-fc="130"')  # 100 × 1,3
+        csv_text = self.client.get('/prep/export/?date=31/10/2025').content.decode('utf-8-sig')
+        self.assertIn('Classic Cheeseburger,chiếc,130,20,5,145,145,Thiếu hàng', csv_text)
+
+    def test_reopen_button_and_locked_run(self):                                                  # L1, L5, L6
+        plan = plans.create_plan(self.r01, SERVICE, self.mgr)
+        plans.approve(plan, self.mgr)
+        self.client.force_login(self.mgr)
+        page = self.client.get('/prep/?date=31/10/2025').content.decode()
+        self.assertIn('data-act="prep-reopen"', page)
+        self.assertRegex(page, r'data-act="prep-run" data-date="[^"]*" disabled ')
+        self.assertIn('Đã duyệt</span>', page)
+        plans.reopen(plan)
+        page = self.client.get('/prep/?date=31/10/2025').content.decode()
+        self.assertNotIn('data-act="prep-reopen"', page)
+        self.assertNotRegex(page, r'data-act="prep-run" data-date="[^"]*" disabled ')
+        self.assertIn('Đã mở lại', page)
+
+    def test_auto_publish_has_no_approver(self):                                                  # L18
+        SystemConfig.objects.filter(pk=1).update(require_approval=False)
+        plan = plans.create_plan(self.r01, SERVICE, self.users['stf1'])
+        self.assertEqual((plan.status, plan.approved_by), (PrepPlan.Status.APPROVED, None))
+        self.client.force_login(self.users['stf1'])
+        self.assertContains(self.client.get('/staff/prep/'), 'Tự động gửi bếp')
+
+    def test_dashboard_chart_uses_forecasts_after_operating_date(self):                         # L7
+        plans.create_plan(self.r01, SERVICE, self.mgr)
+        self.client.force_login(self.mgr)
+        r = self.client.get('/dashboard/?date=05/11/2025')
+        bar = next(b for b in r.context['bars'] if b['label'] == SERVICE)
+        self.assertEqual((bar['value'], bar['forecast']), (155, True))                             # 100+50+5
+
+    def test_server_error_message_is_generic(self):                                              # L12
+        self.client.force_login(self.mgr)
+        with mock.patch.object(plans, 'create_plan', side_effect=RuntimeError("(1062, Duplicate entry 'x')")):
+            r = self.post(self.client, '/api/forecast/run/', {'date': '31/10/2025'})
+        self.assertEqual(r.status_code, 500)
+        self.assertNotIn('Duplicate', r.json()['message'])
+
+
+class Round2SecurityTests(Base):
+    def test_login_page_lists_only_demo_accounts(self):                                          # L2
+        r = self.client.get('/login/')
+        self.assertNotContains(r, 'mgr1')
+        self.assertNotContains(r, 'stf1')
+
+    def test_password_reset_same_answer_and_rate_limited(self):                                  # L16
+        from django.core.cache import cache
+        cache.clear()
+        self.addCleanup(cache.clear)
+        known = self.post(self.client, '/api/password-reset/', {'username': 'mgr1'})
+        unknown = self.post(self.client, '/api/password-reset/', {'username': 'khong.co'})
+        self.assertEqual((known.status_code, unknown.status_code), (200, 200))
+        for _ in range(3):
+            self.post(self.client, '/api/password-reset/', {'username': 'mgr1'})
+        self.assertEqual(self.post(self.client, '/api/password-reset/', {'username': 'mgr1'}).status_code, 429)
+        self.assertEqual(Notification.objects.filter(title__startswith='Yêu cầu cấp lại mật khẩu').count(), 1)
+
+    def test_model_page_opens_without_model_file(self):                                          # L19
+        self.client.force_login(self.users['adm'])
+        with mock.patch.object(engine, 'trained_model', side_effect=RuntimeError('missing')):
+            r = self.client.get('/admin-model/')
+        self.assertContains(r, 'Không nạp được mô hình')

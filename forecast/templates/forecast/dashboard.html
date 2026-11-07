@@ -83,7 +83,7 @@
         <td class="px-4 py-5 font-medium">{{ l.product.menu_item_name }}</td>
         <td class="px-4 text-right">{{ l.applied_qty }}</td>
         <td class="px-4 text-center"><span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#F6B8B8] text-[#9B1C1C] font-medium"><i class="w-1.5 h-1.5 rounded-full bg-[#9B1C1C]"></i>Thiếu hàng</span></td>
-        <td class="px-4 text-center"><button type="button" data-act="prep-reason" data-line="{{ l.pk }}" data-name="{{ l.product.menu_item_name }}" data-unit="{{ l.unit }}" data-fc="{{ l.forecast_qty }}" data-safe="{{ l.safety_stock }}" data-cur="{{ l.current_stock }}" data-applied="{{ l.applied_qty }}" class="px-4 py-1.5 rounded-full bg-[#DDF2EA] text-forest font-medium">Xem</button></td>
+        <td class="px-4 text-center"><button type="button" data-act="prep-reason" data-line="{{ l.pk }}" data-name="{{ l.product.menu_item_name }}" data-unit="{{ l.unit }}" data-fc="{{ l.fc_adjusted }}" data-safe="{{ l.safety_stock }}" data-cur="{{ l.current_stock }}" data-need="{{ l.need_qty }}" data-applied="{{ l.applied_qty }}" class="px-4 py-1.5 rounded-full bg-[#DDF2EA] text-forest font-medium">Xem</button></td>
       </tr>
       {% endfor %}
     </tbody>

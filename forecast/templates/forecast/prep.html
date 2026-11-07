@@ -8,7 +8,7 @@
   <form method="get" id="date-form" class="flex items-center gap-3 text-sm">
     <span class="text-ink/70">Ngày phục vụ</span>
     <input type="text" name="date" readonly data-calendar="service" data-autosubmit value="{{ day|dm }}" class="h-11 w-[150px] rounded-full border border-ink/15 bg-white px-4 cursor-pointer">
-    <button type="button" data-act="prep-run" data-date="{{ day|dm }}" class="h-11 px-5 rounded-full border border-ink/15 bg-white font-medium flex items-center gap-2">
+    <button type="button" data-act="prep-run" data-date="{{ day|dm }}" {% if locked or not config.managers_can_run %}disabled title="{% if locked %}Danh sách đã duyệt – mở lại danh sách để chạy lại dự báo{% else %}Quản trị viên đã tắt quyền chạy dự báo của quản lý{% endif %}"{% endif %} class="h-11 px-5 rounded-full border border-ink/15 bg-white font-medium flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed">
       <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M6 4l14 8-14 8V4z"/></svg>Chạy dự báo
     </button>
   </form>
@@ -24,6 +24,11 @@
       <a href="{% url 'forecast:prep_export' %}?date={{ day|dm }}" class="h-10 px-4 rounded-full bg-white border border-ink/15 flex items-center gap-2">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v12m0 0l-4-4m4 4l4-4M4 20h16"/></svg>Tải Excel
       </a>
+      {% if locked %}
+      <button type="button" data-act="prep-reopen" data-plan="{{ plan.pk }}" data-date="{{ day|dm }}" class="h-10 px-4 rounded-full bg-white border border-ink/15 flex items-center gap-2">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v6h6M20 20v-6h-6M5 15a7 7 0 0012 3M19 9A7 7 0 007 6"/></svg>Mở lại danh sách
+      </button>
+      {% endif %}
       {% if plan %}
       <button type="button" data-act="prep-approve" data-plan="{{ plan.pk }}" data-status="{{ plan.status }}" data-date="{{ day|dm }}"
               data-approved-at="{{ plan.approved_at|date:'d/m/Y H:i' }}" data-total="{{ plan.lines.count }}"
@@ -49,6 +54,18 @@
     </div>
     <span class="text-ink/70">Kiểm kho: {{ plan.inventory_count.user.first_name|default:"—" }} · {{ plan.inventory_count.created_at|date:"d/m/Y H:i" }}</span>
   </div>
+  <div class="px-4 pb-3 text-sm">
+    {% if reopened %}
+    <span class="px-3 py-1 rounded-full bg-[#FFF0C9] text-[#8A5A00]">Đã mở lại · {{ plan.reopened_at|date:"d/m/Y H:i" }}</span>
+    <span class="text-ink/70 ml-2">Bấm “Chạy dự báo” để lập bản mới rồi duyệt lại; bếp vẫn dùng danh sách đã duyệt gần nhất.</span>
+    {% elif plan.status == 'approved' %}
+    <span class="px-3 py-1 rounded-full bg-mint text-forest">{% if complete %}Hoàn thành{% else %}Đã duyệt{% endif %}</span>
+    <span class="text-ink/70 ml-2">{% if plan.approved_by %}{{ plan.approved_by.first_name|default:plan.approved_by.username }}{% else %}Tự động gửi bếp{% endif %} · {{ plan.approved_at|date:"d/m/Y H:i" }}</span>
+    {% else %}
+    <span class="px-3 py-1 rounded-full bg-[#EEF0EC] text-ink/80">Chờ duyệt · phiên bản {{ plan.version }}</span>
+    {% if plan.adjustment_pct %}<span class="text-ink/70 ml-2">Đã điều chỉnh {{ plan.adjustment_pct }}% · {{ plan.adjustment_reason }}</span>{% endif %}
+    {% endif %}
+  </div>
 
   <table class="w-full text-sm">
     <thead class="bg-[#EEF0EC] text-ink/70">
@@ -66,7 +83,7 @@
       {% for l in lines %}
       <tr>
         <td class="text-left px-5 py-4"><div>{{ l.product.menu_item_name }}</div><div class="text-xs text-ink/60">Đơn vị: {{ l.unit }}</div></td>
-        <td>{{ l.forecast_qty }}</td><td>{{ l.safety_stock }}</td><td>{{ l.current_stock }}</td>
+        <td>{{ l.fc_adjusted }}</td><td>{{ l.safety_stock }}</td><td>{{ l.current_stock }}</td>
         <td><button type="button" {% if plan.status == 'pending' %}data-act="prep-adjust" data-line="{{ l.pk }}"{% else %}disabled{% endif %} data-name="{{ l.product.menu_item_name }}" data-unit="{{ l.unit }}" data-applied="{{ l.applied_qty }}" class="inline-block min-w-[100px] py-1.5 rounded-full border border-ink/20 {% if plan.status == 'pending' %}hover:bg-page{% endif %}">{{ l.applied_qty }}</button>
           {% if l.applied_qty != l.need_qty %}<div class="text-xs mt-1"><span class="px-2 py-0.5 rounded bg-[#F6E3A5] text-[#6B4E00]">Đã sửa</span> <span class="text-ink/60">Đề xuất gốc {{ l.need_qty }}</span></div>{% endif %}</td>
         <td>
@@ -74,7 +91,7 @@
           {% elif l.level == 'topup' %}<span class="px-3 py-1.5 rounded-md bg-[#F6E3A5] text-[#6B4E00]">Cần bổ sung</span>
           {% else %}<span class="px-3 py-1.5 rounded-md bg-mint text-forest">Đủ hàng</span>{% endif %}
         </td>
-        <td><button type="button" data-act="prep-reason" data-line="{{ l.pk }}" data-name="{{ l.product.menu_item_name }}" data-unit="{{ l.unit }}" data-fc="{{ l.forecast_qty }}" data-safe="{{ l.safety_stock }}" data-cur="{{ l.current_stock }}" data-applied="{{ l.applied_qty }}" class="inline-block min-w-[80px] py-1.5 rounded-full border border-ink/20 hover:bg-page">Xem</button></td>
+        <td><button type="button" data-act="prep-reason" data-line="{{ l.pk }}" data-name="{{ l.product.menu_item_name }}" data-unit="{{ l.unit }}" data-fc="{{ l.fc_adjusted }}" data-safe="{{ l.safety_stock }}" data-cur="{{ l.current_stock }}" data-need="{{ l.need_qty }}" data-applied="{{ l.applied_qty }}" class="inline-block min-w-[80px] py-1.5 rounded-full border border-ink/20 hover:bg-page">Xem</button></td>
       </tr>
       {% empty %}
       <tr><td colspan="7" class="py-10 text-ink/60">Không có món nào trong bộ lọc này.</td></tr>

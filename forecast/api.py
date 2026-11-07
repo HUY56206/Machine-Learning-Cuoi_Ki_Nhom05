@@ -1,10 +1,12 @@
 """API JSON cho các popup/nút trên giao diện. Mọi lỗi nghiệp vụ trả {ok: False, error: <mã>, message: <tiếng Việt>}."""
 import json
+import logging
 from datetime import timedelta
 
 from django.contrib.auth import update_session_auth_hash
 from django.contrib.auth.models import User
 from django.contrib.auth.password_validation import validate_password
+from django.core.cache import cache
 from django.core.exceptions import ValidationError
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404
@@ -19,6 +21,8 @@ from forecast.services.units import unit_for
 from forecast.views import parse_date
 
 MANAGER, STAFF, ADMIN = Role.MANAGER, Role.STAFF, Role.ADMIN
+RESET_MAX_REQUESTS, RESET_WINDOW_SECONDS = 5, 15 * 60
+logger = logging.getLogger(__name__)
 
 
 def body(request):
@@ -65,8 +69,9 @@ def run_forecast(request):
             current = plans.working_plan(request.user.profile.store, service_date)
             resp = JsonResponse({'ok': False, 'error': 'approved', 'message': str(exc), 'plan_id': current.pk}, status=409)
         return resp
-    except Exception as exc:                                    # lỗi hệ thống (MySQL, mô hình…)
-        return fail('server_error', f'Không thể chạy dự báo: {exc}', 500)
+    except Exception:                                           # lỗi hệ thống (MySQL, mô hình…): ghi log, không lộ chi tiết
+        logger.exception('Chạy dự báo lỗi: %s %s', request.user.profile.store_id, service_date)
+        return fail('server_error', 'Không thể chạy dự báo do lỗi hệ thống · Thử lại sau ít phút hoặc báo quản trị viên.', 500)
     return JsonResponse({'ok': True, 'plan': plan_json(plan)})
 
 
@@ -81,7 +86,8 @@ def plan_detail(request, plan_id):
         'original_total': sum(l.need_qty for l in lines),
         'approved_by': (plan.approved_by.first_name or plan.approved_by.username) if plan.approved_by else '',
         'approved_at': timezone.localtime(plan.approved_at).strftime('%d/%m/%Y %H:%M') if plan.approved_at else '',
-        'lines': [{'name': l.product.menu_item_name, 'unit': unit_for(l.product), 'forecast': round(l.forecast_qty * (1 + pct / 100)),
+        'reopened': plan.reopened_at is not None,
+        'lines': [{'name': l.product.menu_item_name, 'unit': unit_for(l.product), 'forecast': plans.adjusted_forecast(l.forecast_qty, pct),
                    'baseline': l.baseline_qty,
                    'diff': round((l.forecast_qty * (1 + pct / 100) - l.baseline_qty) / l.baseline_qty * 100) if l.baseline_qty else 0}
                   for l in lines],
@@ -231,10 +237,18 @@ def save_prefs(request):
 
 @require_POST
 def password_reset_request(request):
-    """Công khai (người dùng chưa đăng nhập): ghi nhận yêu cầu để quản trị viên xử lý."""
+    """Công khai (người dùng chưa đăng nhập): ghi nhận yêu cầu để quản trị viên xử lý.
+    Luôn trả cùng một câu (không cho dò tên đăng nhập nào có thật) và giới hạn số lần gửi theo địa chỉ máy."""
     username = str(body(request).get('username', '')).strip()
-    if not User.objects.filter(username=username, is_active=True).exists():
-        return fail('unknown_user', 'Không tìm thấy tài khoản.')
-    Notification.objects.create(kind=Notification.Kind.DATA, role=ADMIN, title=f'Yêu cầu cấp lại mật khẩu: {username}',
-                                detail=f'Chờ xử lý · {timezone.localtime():%d/%m/%Y %H:%M}', link='accounts')
+    if not username:
+        return fail('missing', 'Nhập tên đăng nhập.')
+    key = f'pw-reset:{request.META.get("REMOTE_ADDR", "")}'
+    if cache.get(key, 0) >= RESET_MAX_REQUESTS:
+        return fail('too_many', 'Đã gửi quá nhiều yêu cầu · Thử lại sau 15 phút.', 429)
+    cache.set(key, cache.get(key, 0) + 1, RESET_WINDOW_SECONDS)
+    title = f'Yêu cầu cấp lại mật khẩu: {username}'
+    if User.objects.filter(username=username, is_active=True).exists() and \
+            not Notification.objects.filter(kind=Notification.Kind.DATA, role=ADMIN, title=title).exists():
+        Notification.objects.create(kind=Notification.Kind.DATA, role=ADMIN, title=title,
+                                    detail=f'Chờ xử lý · {timezone.localtime():%d/%m/%Y %H:%M}', link='accounts')
     return JsonResponse({'ok': True, 'at': timezone.localtime().strftime('%d/%m/%Y %H:%M')})

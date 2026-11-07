@@ -1,4 +1,6 @@
 """API JSON của quản trị viên. Cùng quy ước lỗi với forecast/api.py: {ok: False, error, message}."""
+import logging
+
 from django.contrib.auth.models import User
 from django.http import JsonResponse
 from django.views.decorators.http import require_GET, require_POST
@@ -11,6 +13,8 @@ from forecast.services.adminops import AdminError
 from forecast.views import parse_date
 
 ADMIN = Role.ADMIN
+SERVER_ERROR = 'Không thể chạy dự báo do lỗi hệ thống · Thử lại sau ít phút.'
+logger = logging.getLogger(__name__)
 RUN_MESSAGES = {'approved': 'Đã duyệt – quản lý cần mở lại danh sách trước khi chạy lại.',
                 'no_inventory': 'Chưa có kiểm kho để tính lượng cần chuẩn bị.', 'no_data': 'Không có dữ liệu đầu vào cho ngày đã chọn.'}
 
@@ -60,8 +64,9 @@ def run_store(request):
         plan = adminops.run_store(store, request.user)
     except plans.PlanError as exc:
         return fail(exc.code, RUN_MESSAGES.get(exc.code, str(exc)), 409 if exc.code == 'approved' else 400)
-    except Exception as exc:
-        return fail('server_error', f'Không thể chạy dự báo: {exc}', 500)
+    except Exception:
+        logger.exception('Admin chạy dự báo lỗi: %s', store.pk)
+        return fail('server_error', SERVER_ERROR, 500)
     from forecast.api import plan_json
     return JsonResponse({'ok': True, 'plan': plan_json(plan), 'store_name': f'{store.pk} · {store.restaurant_name}'})
 
@@ -71,8 +76,9 @@ def run_store(request):
 def run_all(request):
     try:
         return JsonResponse({'ok': True, **adminops.run_all(request.user)})
-    except Exception as exc:
-        return fail('server_error', f'Không thể chạy dự báo: {exc}', 500)
+    except Exception:
+        logger.exception('Admin chạy dự báo toàn hệ thống lỗi')
+        return fail('server_error', SERVER_ERROR, 500)
 
 
 # ----------------------------------------------------------------------------- cửa hàng

@@ -430,7 +430,9 @@
       text: 'Mở lại để điều chỉnh hoặc chạy dự báo mới. Bếp tiếp tục xem danh sách đã duyệt gần nhất; danh sách mới chỉ gửi đến bếp sau khi quản lý duyệt lại.',
       actions: [{ label: 'Hủy', kind: 'ghost' }, { label: 'Mở lại danh sách', kind: 'primary', run: function () {
         withLoading({ title: 'Đang mở lại danh sách', text: 'Vui lòng đợi.' }, post(planUrl(planId, 'reopen')), function (res) {
-          if (res.ok) runForecast(date); else failBox(res, 'Không thể mở lại danh sách');
+          if (!res.ok) return failBox(res, 'Không thể mở lại danh sách');
+          alertBox({ type: 'success', title: 'Đã mở lại danh sách', width: 'max-w-[480px]', onClose: reload,
+            text: 'Ngày ' + date + ' · Nút “Chạy dự báo” đã bật lại. Bếp vẫn dùng danh sách đã duyệt cho đến khi quản lý duyệt bản mới.' });
         });
         return false;
       } }]
@@ -452,7 +454,7 @@
           return alertBox({
             type: 'error', title: 'Đã duyệt – không chạy lại dự báo', width: 'max-w-[480px]',
             text: 'Danh sách ngày ' + date + ' đã được duyệt. Muốn chạy lại, quản lý cần mở lại danh sách; bếp sẽ nhận danh sách mới sau khi duyệt lại.',
-            actions: [{ label: 'Chạy lại', kind: 'primary', run: function () { reopenConfirm(res.plan_id, date); return false; } }]
+            actions: [{ label: 'Đóng', kind: 'ghost' }, { label: 'Mở lại danh sách', kind: 'primary', run: function () { reopenConfirm(res.plan_id, date); return false; } }]
           });
         }
         var retry = res.error === 'no_data' || res.error === 'server_error';
@@ -525,6 +527,7 @@
     'view-report': function (f) { goSubmit(f, 'Đang tải báo cáo', 'Đang tổng hợp doanh thu và lượng bán theo kỳ lọc.'); },
 
     'prep-run': function (el) { runForecast(el.getAttribute('data-date')); },
+    'prep-reopen': function (el) { reopenConfirm(el.getAttribute('data-plan'), el.getAttribute('data-date')); },
     'none-ok': function () { alertBox({ type: 'warning', title: 'Không cần chuẩn bị thêm', text: 'Không có món đủ hàng · 0 món' }); },
     'prep-approve': function (el) {
       var id = el.getAttribute('data-plan'), date = el.getAttribute('data-date');
@@ -535,7 +538,8 @@
           return info({ title: 'Danh sách đã được duyệt', closeBtn: true, rows: [
             ['Trạng thái', 'Đã duyệt'], ['Cửa hàng', res.store_name], ['Ngày phục vụ', date],
             ['Phạm vi', p.lines + ' món cần chuẩn bị · Áp dụng ' + thousand(p.applied_total) + ' phần'],
-            ['Người thực hiện', res.approved_by], ['Thời điểm', res.approved_at]] });
+            ['Người thực hiện', res.approved_by || 'Tự động gửi bếp'], ['Thời điểm', res.approved_at]],
+            actions: res.reopened ? undefined : [{ label: 'Mở lại danh sách', kind: 'ghost', run: function () { reopenConfirm(id, date); return false; } }] });
         }
         info({
           title: 'Duyệt danh sách chuẩn bị', closeBtn: true, width: 'max-w-[560px]',
@@ -565,7 +569,7 @@
         actions: [{ label: 'Hủy', kind: 'ghost' }, { label: 'Lưu số lượng', kind: 'primary', run: function () {
           withLoading({ title: 'Đang lưu số lượng', text: 'Vui lòng đợi.' }, post('/api/line/' + el.getAttribute('data-line') + '/qty/', { qty: qty }), function (res) {
             if (!res.ok) return failBox(res, 'Không thể lưu số lượng');
-            el.setAttribute('data-applied', qty); el.textContent = qty; close();
+            reload();                                   // hiện ngay nhãn "Đã sửa · Đề xuất gốc"
           });
           return false;
         } }]
@@ -665,7 +669,9 @@
     /* Quản lý · Chuẩn bị hàng */
     'prep-reason': function (el) {
       var d = el.dataset;
-      var fc = +d.fc, safe = +d.safe, cur = +d.cur, need = fc + safe - cur, applied = +d.applied || need;
+      var fc = +d.fc, safe = +d.safe, cur = +d.cur;
+      var need = d.need !== undefined ? +d.need : Math.max(0, fc + safe - cur);
+      var applied = d.applied !== undefined && d.applied !== '' ? +d.applied : need;
       var short = cur < safe, unit = d.unit;
       var callout = short
         ? '<div class="rounded-lg bg-[#F4AEB2] p-3 my-3 text-sm"><div class="font-medium">Tồn kho thấp hơn mức an toàn ' + (safe - cur) + ' ' + esc(unit) + '</div><div class="text-xs mt-1">Hiện có ' + cur + ' ' + esc(unit) + ' · Mức an toàn: ' + safe + ' ' + esc(unit) + '</div></div>'
