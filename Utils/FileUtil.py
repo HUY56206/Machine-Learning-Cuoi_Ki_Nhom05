@@ -9,7 +9,6 @@ from Utils import Config
 class FileUtil:
     @staticmethod
     def saveModel(model, filename):
-        """Lưu mô hình vào thư mục Assets. Trả về True nếu thành công."""
         try:
             path = Path(filename)
             if not path.is_absolute():

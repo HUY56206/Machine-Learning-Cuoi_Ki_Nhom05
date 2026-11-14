@@ -1,4 +1,3 @@
-"""API JSON cho các popup/nút trên giao diện. Mọi lỗi nghiệp vụ trả {ok: False, error: <mã>, message: <tiếng Việt>}."""
 import json
 import logging
 from datetime import timedelta
@@ -49,11 +48,9 @@ def plan_json(plan):
 
 
 def my_plan(request, plan_id):
-    """Đề xuất thuộc đúng cửa hàng của người gọi (chặn truy cập chéo cửa hàng)."""
     return get_object_or_404(PrepPlan, pk=plan_id, store=request.user.profile.store)
 
 
-# ----------------------------------------------------------------------------- dự báo & duyệt
 @require_POST
 @api_role_required(MANAGER)
 def run_forecast(request):
@@ -65,11 +62,11 @@ def run_forecast(request):
         plan = plans.create_plan(request.user.profile.store, service_date, request.user, config)
     except plans.PlanError as exc:
         resp = fail(exc.code, str(exc), 409 if exc.code == 'approved' else 400)
-        if exc.code == 'approved':                              # để giao diện mở lại đúng danh sách
+        if exc.code == 'approved':
             current = plans.working_plan(request.user.profile.store, service_date)
             resp = JsonResponse({'ok': False, 'error': 'approved', 'message': str(exc), 'plan_id': current.pk}, status=409)
         return resp
-    except Exception:                                           # lỗi hệ thống (MySQL, mô hình…): ghi log, không lộ chi tiết
+    except Exception:
         logger.exception('Chạy dự báo lỗi: %s %s', request.user.profile.store_id, service_date)
         return fail('server_error', 'Không thể chạy dự báo do lỗi hệ thống · Thử lại sau ít phút hoặc báo quản trị viên.', 500)
     return JsonResponse({'ok': True, 'plan': plan_json(plan)})
@@ -140,11 +137,9 @@ def reopen_plan(request, plan_id):
     return JsonResponse({'ok': True, 'plan': plan_json(plan)})
 
 
-# ----------------------------------------------------------------------------- nhân viên
 @require_GET
 @api_role_required(MANAGER, ADMIN)
 def line_reason(request, line_id):
-    """Lý do dự báo của một món. Quản lý chỉ xem món của cửa hàng mình; quản trị viên xem được mọi cửa hàng."""
     lines = PrepLine.objects.select_related('plan', 'product')
     if request.user.profile.role == ADMIN:
         line = get_object_or_404(lines, pk=line_id)
@@ -189,7 +184,6 @@ def save_inventory(request):
                          'plan': plan_json(plan) if plan else None})
 
 
-# ----------------------------------------------------------------------------- thông báo & hồ sơ
 def _notifications(user):
     return visible_for(user)
 
@@ -242,8 +236,6 @@ def save_prefs(request):
 
 @require_POST
 def password_reset_request(request):
-    """Công khai (người dùng chưa đăng nhập): ghi nhận yêu cầu để quản trị viên xử lý.
-    Luôn trả cùng một câu (không cho dò tên đăng nhập nào có thật) và giới hạn số lần gửi theo địa chỉ máy."""
     username = str(body(request).get('username', '')).strip()
     if not username:
         return fail('missing', 'Nhập tên đăng nhập.')

@@ -1,4 +1,3 @@
-"""Nghiệp vụ của quản trị viên: dữ liệu, mô hình & chạy dự báo, cửa hàng, tài khoản, cấu hình."""
 import csv
 import io
 import re
@@ -20,14 +19,12 @@ from Utils import Config
 
 
 class AdminError(Exception):
-    """Lỗi nghiệp vụ có mã để giao diện chọn đúng popup."""
 
     def __init__(self, code, message):
         super().__init__(message)
         self.code = code
 
 
-# ============================================================================ Dữ liệu (QTV-1)
 def missing_qs(start, end):
     return DailySale.objects.filter(sale_date__range=(start, end), quantity_raw__isnull=True)
 
@@ -44,7 +41,6 @@ def missing_rows(start, end, limit=50):
 
 
 def data_overview(start, end):
-    """Bảng 6 nhóm dữ liệu trong kỳ lọc."""
     sales = DailySale.objects.filter(sale_date__range=(start, end))
     span = sales.aggregate(a=Min('sale_date'), b=Max('sale_date'))
     summ = missing_summary(start, end)
@@ -74,7 +70,6 @@ def data_overview(start, end):
 
 
 def refresh_data_notification(config=None):
-    """Thông báo cho quản trị viên khi còn dòng thiếu số lượng (xem NV/QTV: 'Kiểm tra dữ liệu')."""
     config = config or SystemConfig.get()
     n = missing_qs('2000-01-01', config.operating_date).count()
     Notification.objects.filter(kind=Notification.Kind.DATA, role=Role.ADMIN, title__startswith='Dữ liệu thiếu').delete()
@@ -84,10 +79,9 @@ def refresh_data_notification(config=None):
     return n
 
 
-# ---------------------------------------------------------------------------- nhập dữ liệu
 MAX_IMPORT_ROWS, MAX_IMPORT_BYTES = 200_000, 20 * 1024 * 1024
 DATE_FORMATS = ('%Y-%m-%d', '%d/%m/%Y')
-GROUP_COLUMNS = {                          # cột bắt buộc theo nhóm (tên cột khớp dataset gốc)
+GROUP_COLUMNS = {
     'Bán hàng hằng ngày': ['sale_date', 'restaurant_id', 'menu_item_id', 'quantity'],
     'Khuyến mãi': ['promo_date', 'restaurant_id', 'menu_item_id'],
     'Thời tiết': ['event_date', 'restaurant_id', 'avg_temp_f', 'precip_type'],
@@ -97,7 +91,6 @@ MODES = ('Thêm dữ liệu mới', 'Cập nhật theo khóa')
 
 
 def read_table(filename, raw):
-    """CSV (UTF-8) hoặc Excel -> (danh sách cột, danh sách dòng dict)."""
     if len(raw) > MAX_IMPORT_BYTES:
         raise AdminError('too_large', 'Tệp vượt quá 20 MB.')
     name = filename.lower()
@@ -139,7 +132,6 @@ def _flag(v):
 
 
 def _normalize(group, r, stores, products):
-    """Một dòng tệp -> (khóa, giá trị). Ném ValueError nếu dòng không hợp lệ."""
     store = r['restaurant_id']
     if store not in stores:
         raise ValueError(f'cửa hàng không tồn tại "{store}"')
@@ -162,7 +154,7 @@ def _normalize(group, r, stores, products):
                      'precip_type': r['precip_type'], 'is_holiday': _flag(r.get('is_holiday', '')),
                      'holiday_name': r.get('holiday_name') or None, 'is_special_event': _flag(r.get('is_special_event', '')),
                      'special_event_name': r.get('special_event_name') or None}
-    return key, {'is_holiday': _flag(r.get('is_holiday', '')), 'holiday_name': r.get('holiday_name') or None,    # Ngày lễ & sự kiện
+    return key, {'is_holiday': _flag(r.get('is_holiday', '')), 'holiday_name': r.get('holiday_name') or None,
                  'is_special_event': _flag(r.get('is_special_event', '')), 'special_event_name': r.get('special_event_name') or None}
 
 
@@ -182,7 +174,6 @@ def _existing(group, keys):
 
 
 def analyse_import(group, mode, filename, raw):
-    """Kiểm tra tệp, phân loại dòng: mới / cập nhật / trùng khóa / lỗi. Chưa ghi gì."""
     if group not in GROUP_COLUMNS or mode not in MODES:
         raise AdminError('invalid', 'Nhóm dữ liệu hoặc cách nhập không hợp lệ.')
     cols, rows = read_table(filename, raw)
@@ -203,20 +194,20 @@ def analyse_import(group, mode, filename, raw):
                 out['errors'].append(f'Dòng {line}: {exc}')
             continue
         if key in parsed:
-            out['skipped'] += 1                                    # trùng khóa ngay trong tệp
+            out['skipped'] += 1
             continue
         parsed[key] = vals
     exists = _existing(group, list(parsed))
     for key, vals in parsed.items():
         if key in exists:
-            if mode == MODES[1] and group != 'Khuyến mãi':          # khuyến mãi chỉ có khóa, không có trường để cập nhật
+            if mode == MODES[1] and group != 'Khuyến mãi':
                 out['update'].append((key, vals))
             else:
-                out['skipped'] += 1                                # thêm mới nhưng khóa đã có
+                out['skipped'] += 1
         elif mode == MODES[0] and group != 'Ngày lễ & sự kiện':
             out['new'].append((key, vals))
         else:
-            out['skipped'] += 1                                    # cập nhật khóa chưa có; ngày lễ/sự kiện chỉ cập nhật dòng thời tiết sẵn có
+            out['skipped'] += 1
     return out
 
 
@@ -250,11 +241,10 @@ def commit_import(group, mode, filename, raw):
     return {'inserted': len(res['new']), 'updated': len(res['update']), 'skipped': res['skipped'], 'invalid': res['invalid']}
 
 
-# ============================================================================ Dự báo & Mô hình (QTV-2)
 def model_info():
     try:
         tm = engine.trained_model()
-    except Exception:                         # thiếu/hỏng best_model.joblib: trang vẫn mở, báo thiếu mô hình
+    except Exception:
         return {'name': None, 'file': engine.MODEL_FILE, 'missing': True}
     metrics = {}
     try:
@@ -270,7 +260,6 @@ def model_info():
 
 
 def store_runs(config=None):
-    """Mỗi cửa hàng một dòng: kiểm kho, dự báo, đề xuất, người quản lý; xếp 'Cần xử lý trước'."""
     config, day = config or SystemConfig.get(), plans.service_date_of(config or SystemConfig.get())
     managers = {p.store_id: p.user for p in Profile.objects.filter(role=Role.MANAGER, user__is_active=True).select_related('user')}
     rows = []
@@ -293,7 +282,6 @@ def store_runs(config=None):
 
 
 def store_series(store, config=None, days=14):
-    """Số bán thật đến ngày vận hành + dự báo ngày phục vụ của cửa hàng (không lộ số bán sau ngày vận hành)."""
     config = config or SystemConfig.get()
     sales = (DailySale.objects.filter(restaurant=store, sale_date__lte=config.operating_date,
                                       sale_date__gt=config.operating_date - pd.Timedelta(days=days).to_pytimedelta())
@@ -312,7 +300,6 @@ def run_store(store, user, config=None):
 
 
 def run_all(user, config=None):
-    """Chạy dự báo lần lượt cho mọi cửa hàng; bỏ qua cửa hàng chưa kiểm kho hoặc đã duyệt, không dừng giữa chừng."""
     config, summary = config or SystemConfig.get(), {'done': [], 'skipped': {}}
     for store in Store.objects.all():
         try:
@@ -323,7 +310,6 @@ def run_all(user, config=None):
     return summary
 
 
-# ============================================================================ Cửa hàng (QTV-4)
 def stores_overview(config=None):
     config = config or SystemConfig.get()
     managers = {p.store_id: p.user for p in Profile.objects.filter(role=Role.MANAGER, user__is_active=True).select_related('user')}
@@ -367,8 +353,6 @@ def save_store(code, name, city_text, manager_username=None, creating=False):
 
 @transaction.atomic
 def assign_manager(store, manager_label):
-    """Gán quản lý cho cửa hàng. Phân công mới thay thế cửa hàng hiện tại của quản lý đó;
-    quản lý cũ của cửa hàng này (nếu khác) trở thành chưa gán. 'Chưa gán' gỡ quản lý khỏi cửa hàng."""
     current = Profile.objects.filter(role=Role.MANAGER, store=store).select_related('user')
     if manager_label in (None, '', 'Chưa gán'):
         current.update(store=None)
@@ -384,7 +368,6 @@ def assign_manager(store, manager_label):
     return replaced[0] if replaced else None
 
 
-# ============================================================================ Tài khoản (QTV-3)
 USERNAME_RE = re.compile(r'[a-z0-9._-]{3,30}')
 ROLE_BY_LABEL = {label: value for value, label in Role.choices}
 
@@ -400,7 +383,6 @@ def active_admin_count(excluding=None):
 
 @transaction.atomic
 def save_account(original, name, username, role_label, scope):
-    """Thêm (original rỗng) hoặc sửa tài khoản. Trả (user, mật khẩu tạm | None)."""
     name, username = (name or '').strip(), (username or '').strip().lower()
     role = ROLE_BY_LABEL.get(role_label)
     if not name or not username or not role or not scope:
@@ -466,10 +448,9 @@ def reset_password(username):
     return user, temp
 
 
-# ============================================================================ Cấu hình (QTV-5)
 CHOICES = {'service_level': {'90%': 90, '95%': 95, '99%': 99},
            'prep_deadline': ('09:00', '10:00', '11:00'), 'inventory_reminder': ('20:00', '21:00', '22:00')}
-TOGGLES = ('alert_red', 'alert_yellow', 'auto_plan_after_inventory', 'managers_can_run')   # require_approval chỉ đổi trong Django Admin
+TOGGLES = ('alert_red', 'alert_yellow', 'auto_plan_after_inventory', 'managers_can_run')
 
 
 def save_config(data):
@@ -480,7 +461,7 @@ def save_config(data):
     for field in ('prep_deadline', 'inventory_reminder'):
         if data.get(field) not in CHOICES[field]:
             raise AdminError('invalid', f'Giá trị {field} không hợp lệ.')
-    if data.get('operating_date'):                                   # ngày vận hành: ngày dự báo (= +1) phải nằm trong khoảng cho phép
+    if data.get('operating_date'):
         try:
             day = date.fromisoformat(str(data['operating_date']))
         except ValueError:

@@ -1,10 +1,3 @@
-"""PREPARING DATA (bước 2-4, Slide 08): làm sạch dữ liệu thô rồi lưu vào MySQL.
-
-Nguyên tắc chống rò rỉ dữ liệu:
-- Mọi thống kê dùng để điền thiếu / phát hiện outlier chỉ tính trên tập TRAIN.
-- Không xoá nhu cầu thật: ngày có promotion / holiday / special event không bị coi là outlier.
-- Giữ giá trị gốc ở cột quantity_raw để đánh giá val/test trên số thật.
-"""
 import numpy as np
 import pandas as pd
 
@@ -20,14 +13,13 @@ class QSRDataCleaning:
         self.df = None
 
     def loadRawDataset(self, path=Config.RAW_FILE):
-        # keep_default_na=False: chuỗi "None" ở precip_type nghĩa là "không mưa", không phải missing
+
         self.df = pd.read_csv(path, parse_dates=[Config.DATE_COL], keep_default_na=False,
                               na_values={"quantity": [""]}, low_memory=False)
         self.df["quantity"] = pd.to_numeric(self.df["quantity"], errors="coerce")
         return self.df
 
     def checkStructure(self):
-        """Loại trùng lặp và kiểm tra lưới (ngày x nhà hàng x món) đầy đủ."""
         keys = [Config.DATE_COL] + Config.SERIES_KEYS
         n_dup = self.df.duplicated(keys).sum()
         self.df = self.df.drop_duplicates(keys)
@@ -40,7 +32,6 @@ class QSRDataCleaning:
         print(f"Trùng lặp đã loại: {n_dup} | {n_series} chuỗi x {n_dates} ngày = {len(self.df):,} dòng")
 
     def fitDowStatistics(self):
-        """Median & MAD theo (nhà hàng, món, thứ) - chỉ trên train, chỉ ngày thường."""
         train = self.df[self.df[Config.DATE_COL] <= Config.TRAIN_END]
         normal_days = train[train[EVENT_FLAGS].sum(axis=1) == 0]
         grp = normal_days.groupby(DOW_KEYS)["quantity"]
@@ -64,7 +55,7 @@ class QSRDataCleaning:
         is_event_day = df[EVENT_FLAGS].sum(axis=1) > 0
         df["is_outlier"] = ((df["quantity"] > upper) & ~is_event_day).astype("int8")
 
-        # Giá trị thiếu và outlier (lỗi ghi nhận) được thay bằng median cùng thứ trong tuần
+
         replace = (df["is_imputed"] == 1) | (df["is_outlier"] == 1)
         df.loc[replace, "quantity"] = df.loc[replace, "dow_median"].round()
         df["quantity"] = df["quantity"].astype("int32")
@@ -87,9 +78,8 @@ class QSRDataCleaning:
                   f" | outlier={sub['is_outlier'].sum():>5,}")
         print(f"Giá trị thiếu còn lại: {int(self.df['quantity'].isna().sum())}")
 
-    # ------------------------------------------------------------ lưu vào MySQL
+
     def splitTables(self):
-        """Tách bảng phẳng thành 5 bảng theo đúng độ chi tiết của từng thực thể."""
         df = self.df
         return {
             "stores": df[["restaurant_id", "restaurant_name", "city", "state"]].drop_duplicates(),
@@ -113,7 +103,6 @@ class QSRDataCleaning:
 
     @staticmethod
     def toRows(df):
-        """DataFrame -> list tuple kiểu Python thuần (NaN -> NULL, Timestamp -> date)."""
         df = df.copy()
         for col in df.columns:
             if pd.api.types.is_datetime64_any_dtype(df[col]):
@@ -122,7 +111,6 @@ class QSRDataCleaning:
         return list(df.itertuples(index=False, name=None))
 
     def saveToMySQL(self):
-        """Ghi 5 bảng theo thứ tự đúng ràng buộc khoá ngoại."""
         for name, table in self.splitTables().items():
             n = self.connector.executeMany(self.INSERT_SQL[name], self.toRows(table))
             print(f"{name:15s}: {n:>9,} dòng")

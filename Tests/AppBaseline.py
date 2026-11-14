@@ -1,7 +1,3 @@
-"""Mô hình cơ sở Seasonal Naive & Moving Average 7.   Chạy: python -m Tests.AppBaseline
-
-Chạy file này trước tiên: nó còn lưu 3 tập train / val / test ra data/splits/.
-"""
 from Connectors.Connector import Connector
 from Models.QSRBaselineModel import QSRBaselineModel
 

@@ -1,6 +1,3 @@
-"""Giải thích dự báo bằng SHAP, hai góc nhìn:
-- Quản lý: từng món, gom thành vài nhóm nghiệp vụ bằng tiếng Việt (để quyết định chỉnh / duyệt).
-- Quản trị viên: thêm từng yếu tố kỹ thuật, tên cột, giá trị gốc và mức ảnh hưởng trung bình của cả cửa hàng (để kiểm tra mô hình)."""
 import threading
 import time
 
@@ -11,7 +8,7 @@ from forecast.services.units import unit_for
 CACHE_SECONDS, CACHE_MAX = 600, 32
 _cache, _lock = {}, threading.Lock()
 
-# cột mô hình -> (nhãn tiếng Việt chi tiết, nhóm nghiệp vụ)
+
 G_RECENT, G_DOW, G_SEASON, G_HOLIDAY, G_EVENT, G_PROMO, G_WEATHER, G_ITEM = (
     'Lượng bán gần đây', 'Thứ trong tuần', 'Thời điểm trong năm', 'Ngày lễ', 'Sự kiện đặc biệt', 'Khuyến mãi', 'Thời tiết',
     'Đặc điểm món và cửa hàng')
@@ -33,7 +30,6 @@ FEATURES = {
 
 
 def store_explanation(store_id, service_date):
-    """SHAP của cả cửa hàng trong ngày, nhớ tạm 10 phút (mỗi lần tính ~1 giây)."""
     key, now = (store_id, str(service_date)), time.time()
     with _lock:
         hit = _cache.get(key)
@@ -52,7 +48,6 @@ def _round(x):
 
 
 def _show(v):
-    """Giá trị gốc để hiển thị: số làm tròn 1 chữ số thập phân, chữ giữ nguyên."""
     try:
         f = float(v)
     except (TypeError, ValueError):
@@ -61,7 +56,6 @@ def _show(v):
 
 
 def manager_view(store_id, service_date, product_id, top=5):
-    """Quản lý: các nhóm nghiệp vụ ảnh hưởng nhiều nhất tới dự báo của món (đơn vị = số lượng, + tăng / − giảm)."""
     base, rows = store_explanation(store_id, service_date)
     row = rows.get(product_id)
     if row is None:
@@ -75,8 +69,6 @@ def manager_view(store_id, service_date, product_id, top=5):
 
 
 def admin_view(store_id, service_date, product_id=None, top=10):
-    """Quản trị viên: mức ảnh hưởng trung bình của cả cửa hàng (theo nhóm và theo từng yếu tố) và, nếu chọn món,
-    chi tiết từng yếu tố của món đó kèm tên cột và giá trị gốc."""
     base, rows = store_explanation(store_id, service_date)
     n = max(len(rows), 1)
     by_feat, by_group = {}, {}
@@ -89,7 +81,7 @@ def admin_view(store_id, service_date, product_id=None, top=10):
             gsum[g] = gsum.get(g, 0) + v
         for g, v in gsum.items():
             by_group[g] = by_group.get(g, 0) + abs(v) / n
-    total_g, total_f = sum(by_group.values()) or 1, sum(by_feat.values()) or 1          # tỉ lệ % = phần của yếu tố trong tổng mức ảnh hưởng
+    total_g, total_f = sum(by_group.values()) or 1, sum(by_feat.values()) or 1
     out = {
         'base': _round(base), 'items_count': len(rows),
         'importance_groups': [{'label': g, 'value': _round(v), 'share': round(v / total_g * 100)}

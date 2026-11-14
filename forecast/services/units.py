@@ -1,4 +1,3 @@
-"""Đơn vị tính hiển thị của từng món (dataset không có cột đơn vị)."""
 
 _COUNT_WORDS = ('burger', 'sandwich')
 

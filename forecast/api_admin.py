@@ -1,4 +1,3 @@
-"""API JSON của quản trị viên. Cùng quy ước lỗi với forecast/api.py: {ok: False, error, message}."""
 import logging
 
 from django.contrib.auth.models import User
@@ -24,7 +23,6 @@ def admin_error(exc, status=400):
     return fail(exc.code, str(exc), status)
 
 
-# ----------------------------------------------------------------------------- dữ liệu
 @require_GET
 @api_role_required(ADMIN)
 def data_missing(request):
@@ -37,7 +35,6 @@ def data_missing(request):
 @require_POST
 @api_role_required(ADMIN)
 def data_import(request):
-    """multipart: group, mode, file, confirm ('1' = ghi thật; mặc định chỉ kiểm tra và xem trước)."""
     f = request.FILES.get('file')
     if not f:
         return fail('no_file', 'Chưa chọn tệp hợp lệ · Chọn tệp CSV hoặc Excel để tiếp tục.')
@@ -54,7 +51,6 @@ def data_import(request):
         'errors': res['errors'], 'sample': res['sample'], 'columns': res['columns']}})
 
 
-# ----------------------------------------------------------------------------- chạy dự báo
 @require_POST
 @api_role_required(ADMIN)
 def run_store(request):
@@ -82,11 +78,9 @@ def run_all(request):
         return fail('server_error', SERVER_ERROR, 500)
 
 
-# ----------------------------------------------------------------------------- giải thích mô hình (SHAP)
 @require_GET
 @api_role_required(ADMIN)
 def explain_model(request):
-    """Quản trị viên: mức ảnh hưởng của từng yếu tố tới dự báo của một cửa hàng (mọi cửa hàng), có thể chọn thêm một món."""
     store = Store.objects.filter(pk=request.GET.get('store')).first()
     if not store:
         return fail('not_found', 'Không tìm thấy cửa hàng.', 404)
@@ -107,7 +101,6 @@ def explain_model(request):
     return JsonResponse({'ok': True, 'store': store.pk, 'date': day.isoformat(), **data})
 
 
-# ----------------------------------------------------------------------------- cửa hàng
 @require_POST
 @api_role_required(ADMIN)
 def save_store(request):
@@ -119,7 +112,6 @@ def save_store(request):
     return JsonResponse({'ok': True, 'store': store.pk, 'replaced': replaced})
 
 
-# ----------------------------------------------------------------------------- tài khoản
 @require_POST
 @api_role_required(ADMIN)
 def save_account(request):
@@ -151,7 +143,6 @@ def reset_password(request):
     return JsonResponse({'ok': True, 'username': user.username, 'temp_password': temp})
 
 
-# ----------------------------------------------------------------------------- cấu hình
 @require_POST
 @api_role_required(ADMIN)
 def save_config(request):

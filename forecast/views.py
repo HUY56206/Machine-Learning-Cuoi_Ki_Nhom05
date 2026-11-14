@@ -1,4 +1,3 @@
-"""Các trang HTML. Nghiệp vụ nằm ở forecast/services; thao tác ghi đi qua forecast/api.py."""
 import csv
 import json
 from collections import OrderedDict
@@ -26,12 +25,10 @@ from forecast.services.units import unit_for
 MANAGER, STAFF, ADMIN = Role.MANAGER, Role.STAFF, Role.ADMIN
 PAGE_SIZE = 5
 LOGIN_MAX_FAILS, LOGIN_LOCK_SECONDS = 5, 15 * 60
-LOGIN_SUGGESTIONS = ('lan.r01', 'khanh.r01', 'admin')                 # 3 tài khoản mẫu hiện ở ô đăng nhập
+LOGIN_SUGGESTIONS = ('lan.r01', 'khanh.r01', 'admin')
 
 
-# ----------------------------------------------------------------------------- tiện ích
 def parse_date(text, default=None):
-    """'31/10/2025' hoặc '2025-10-31' -> date; sai định dạng -> default."""
     for fmt in ('%d/%m/%Y', '%Y-%m-%d'):
         try:
             return datetime.strptime(text, fmt).date()
@@ -45,7 +42,6 @@ def page(request, template, active, **ctx):
 
 
 def attach_units(lines):
-    """Gắn đơn vị và dự báo đã áp tỷ lệ điều chỉnh của đề xuất (để Dự báo + Tồn an toàn − Tồn = Cần chuẩn bị)."""
     for ln in lines:
         ln.unit = unit_for(ln.product)
         ln.fc_adjusted = plans.adjusted_forecast(ln.forecast_qty, ln.plan.adjustment_pct)
@@ -53,18 +49,16 @@ def attach_units(lines):
 
 
 def _plan_total(plan):
-    """Tổng dự báo (đã điều chỉnh %) của một đề xuất; None nếu chưa có."""
     if plan is None:
         return None
     return round(sum(l.forecast_qty for l in plan.lines.all()) * (1 + plan.adjustment_pct / 100))
 
 
-# ----------------------------------------------------------------------------- đăng nhập / chung
 def login_view(request):
     if request.method == 'POST':
         username = request.POST.get('username', '')
         key = f'login-fail:{username.lower()}:{request.META.get("REMOTE_ADDR", "")}'
-        if cache.get(key, 0) >= LOGIN_MAX_FAILS:                       # khóa tạm khi sai nhiều lần
+        if cache.get(key, 0) >= LOGIN_MAX_FAILS:
             return JsonResponse({'ok': False, 'error': 'locked'}, status=429)
         user = authenticate(request, username=username, password=request.POST.get('password', ''))
         if user is None or not hasattr(user, 'profile'):
@@ -73,14 +67,14 @@ def login_view(request):
         cache.delete(key)
         auth_login(request, user)
         if not request.POST.get('remember'):
-            request.session.set_expiry(0)                             # không nhớ: hết phiên khi đóng trình duyệt
+            request.session.set_expiry(0)
         target = request.POST.get('next', '')
         if not url_has_allowed_host_and_scheme(target, allowed_hosts={request.get_host()}):
             target = ''
         return JsonResponse({'ok': True, 'next': target or reverse(HOME[user.profile.role])})
     if request.user.is_authenticated and hasattr(request.user, 'profile'):
         return redirect(HOME[request.user.profile.role])
-    # Chỉ gợi ý vài tài khoản mẫu (không liệt kê mọi tên đăng nhập); tên khác người dùng tự gõ.
+
     accounts = [{'value': p.user.username, 'label': f'{p.user.username} · {p.get_role_display()}'}
                 for p in Profile.objects.select_related('user').filter(user__is_active=True, user__username__in=LOGIN_SUGGESTIONS)
                 .order_by('role', 'user__username')]
@@ -117,7 +111,6 @@ def no_access(request):
     return render(request, 'forecast/no_access.html', {'active_menu': 'none'})
 
 
-# ----------------------------------------------------------------------------- quản lý · Tổng quan
 @role_required(MANAGER)
 def dashboard(request):
     store, config = request.user.profile.store, SystemConfig.get()
@@ -128,7 +121,7 @@ def dashboard(request):
     actual = dict(DailySale.objects.filter(restaurant=store, sale_date__in=[d for d in days if d <= config.operating_date])
                   .values('sale_date').annotate(t=Sum('quantity')).values_list('sale_date', 't'))
     bars = []
-    for d in days:                         # ngày sau ngày vận hành chưa có số bán thật -> dùng dự báo đã chạy (nếu có)
+    for d in days:
         if d <= config.operating_date:
             bars.append({'label': d, 'value': actual.get(d), 'forecast': False})
         else:
@@ -149,7 +142,6 @@ def dashboard(request):
                 no_data=plan is None)
 
 
-# ----------------------------------------------------------------------------- quản lý · Chuẩn bị hàng
 def _prep_context(request):
     store, config = request.user.profile.store, SystemConfig.get()
     day = parse_date(request.GET.get('date'), plans.service_date_of(config))
@@ -180,11 +172,10 @@ def prep(request):
 
 @role_required(MANAGER)
 def prep_export(request):
-    """Tải danh sách chuẩn bị dạng CSV (mở được bằng Excel)."""
     store, config, day, plan = _prep_context(request)
     response = HttpResponse(content_type='text/csv; charset=utf-8')
     response['Content-Disposition'] = f'attachment; filename="chuan_bi_{store.pk}_{day:%Y%m%d}.csv"'
-    response.write('﻿')                                          # BOM để Excel đọc đúng tiếng Việt
+    response.write('﻿')
     w = csv.writer(response)
     w.writerow(['Món', 'Đơn vị', 'Dự báo', 'Tồn an toàn', 'Tồn hiện tại', 'Cần chuẩn bị', 'Đề xuất gốc', 'Trạng thái'])
     if plan:
@@ -194,7 +185,6 @@ def prep_export(request):
     return response
 
 
-# ----------------------------------------------------------------------------- quản lý · Dự báo
 @role_required(MANAGER)
 def forecast(request):
     store, config = request.user.profile.store, SystemConfig.get()
@@ -202,7 +192,7 @@ def forecast(request):
     plan = plans.working_plan(store, day)
 
     cards = []
-    for i in (-1, 0, 1):                                              # ngày trước · ngày đang xem · ngày sau
+    for i in (-1, 0, 1):
         d = day + timedelta(days=i)
         p = plans.working_plan(store, d)
         total = round(sum(l.forecast_qty for l in p.lines.all()) * (1 + p.adjustment_pct / 100)) if p else None
@@ -235,7 +225,6 @@ def forecast(request):
                 factors=factors, config=config, locked=plans.is_locked(plan, config))
 
 
-# ----------------------------------------------------------------------------- quản lý · Báo cáo
 PERIODS = OrderedDict([
     ('01/01/2025 – 30/10/2025', (date(2025, 1, 1), date(2025, 10, 30))),
     ('01/11/2025 – 30/11/2025', (date(2025, 11, 1), date(2025, 11, 30))),
@@ -243,7 +232,6 @@ PERIODS = OrderedDict([
 
 
 def _bars(values, top_n=3, fmt=None):
-    """values: list[(label, value)] -> dữ liệu vẽ cột, tô đậm top_n giá trị cao nhất."""
     vals = [v for _, v in values if v is not None]
     peak = max(vals + [1])
     ranked = sorted(vals, reverse=True)[:top_n]
@@ -256,7 +244,7 @@ def report(request):
     store, config = request.user.profile.store, SystemConfig.get()
     period = request.GET.get('period', next(iter(PERIODS)))
     start, end = PERIODS.get(period, next(iter(PERIODS.values())))
-    end = min(end, config.operating_date)                          # không lộ số bán sau ngày vận hành
+    end = min(end, config.operating_date)
     tab = 'accuracy' if request.GET.get('tab') == 'accuracy' else 'trend'
     ctx = {'period': period, 'periods': list(PERIODS), 'store': store, 'has_data': start <= end, 'tab': tab}
     if not ctx['has_data']:
@@ -275,7 +263,7 @@ def report(request):
     by_month = {r['m']: r['a'] for r in history.annotate(m=F('sale_date__month')).values('m').annotate(a=Avg('quantity'))}
     by_dow = {r['d']: r['a'] for r in history.annotate(d=ExtractWeekDay('sale_date')).values('d').annotate(a=Avg('quantity'))}
     months = _bars([(f'T{m}', round(by_month[m], 1)) for m in sorted(by_month)])
-    dows = [(2, 'T2'), (3, 'T3'), (4, 'T4'), (5, 'T5'), (6, 'T6'), (7, 'T7'), (1, 'CN')]   # Django: 1 = Chủ nhật
+    dows = [(2, 'T2'), (3, 'T3'), (4, 'T4'), (5, 'T5'), (6, 'T6'), (7, 'T7'), (1, 'CN')]
     weekdays = _bars([(l, round(by_dow[k], 1)) for k, l in dows if k in by_dow])
     best_month = max(by_month, key=by_month.get)
     best_dow = max(by_dow, key=by_dow.get)
@@ -295,7 +283,6 @@ def report(request):
 
 
 def _accuracy_context(store, config):
-    """Tab Độ chính xác dự báo: wMAPE từng ngày trong 7 ngày gần nhất tới ngày vận hành."""
     end = config.operating_date
     try:
         days = engine.accuracy_by_day(store.pk, end - timedelta(days=6), end)
@@ -314,7 +301,6 @@ FACTORS = [('Sự kiện', 'w.is_special_event = 1'), ('Khuyến mãi', 'pr.prom
 
 
 def _factor_effects(store_id, end):
-    """% chênh lệch bán trung bình giữa ngày/món có yếu tố và không có (cùng cửa hàng)."""
     cols = ', '.join(f'AVG(CASE WHEN {c} THEN s.quantity END), AVG(CASE WHEN NOT ({c}) THEN s.quantity END)' for _, c in FACTORS)
     with connection.cursor() as cur:
         cur.execute(
@@ -331,14 +317,13 @@ def _factor_effects(store_id, end):
     return out
 
 
-# ----------------------------------------------------------------------------- nhân viên · Danh sách chuẩn bị
 @role_required(STAFF)
 def staff_prep(request):
     store, config = request.user.profile.store, SystemConfig.get()
     day = parse_date(request.GET.get('date'), plans.service_date_of(config))
     plan = plans.kitchen_plan(store, day, config)
     ctx = {'day': day, 'plan': plan, 'config': config}
-    if plan is None:                                              # NV-1 trạng thái "Chờ duyệt"
+    if plan is None:
         waiting = plans.working_plan(store, day)
         ctx.update({'waiting': waiting, 'waiting_total': plans.actionable_lines(waiting).count() if waiting else 0})
     else:
@@ -354,7 +339,6 @@ def staff_prep(request):
     return page(request, 'staff_prep', 'staff_prep', **ctx)
 
 
-# ----------------------------------------------------------------------------- nhân viên · Kiểm kho
 CATEGORY_LABELS = OrderedDict([
     ('Drinks', 'Đồ uống'), ('Burgers', 'Burger'), ('Chicken', 'Gà'), ('Sides', 'Món phụ'),
     ('Combos', 'Combo'), ('Breakfast', 'Bữa sáng'), ('Desserts', 'Tráng miệng'), ('Specials', 'Đặc biệt'),
@@ -390,7 +374,6 @@ def inventory(request):
                 source=source, readonly=day != config.operating_date)
 
 
-# ----------------------------------------------------------------------------- quản trị viên
 def _store_choices():
     return [f'{s.pk} · {s.restaurant_name}' for s in Store.objects.all()]
 

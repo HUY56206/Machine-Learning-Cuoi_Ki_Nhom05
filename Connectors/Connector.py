@@ -1,4 +1,4 @@
-#python -m pip install mysql-connector-python
+
 import traceback
 
 import mysql.connector
@@ -21,7 +21,7 @@ class Connector:
             self.conn = mysql.connector.connect(
                 host=self.server,
                 port=self.port,
-                database=self.database or None,   # "" -> chưa chọn DB (lúc tạo schema)
+                database=self.database or None,
                 user=self.username,
                 password=self.password)
             return self.conn
@@ -55,7 +55,6 @@ class Connector:
         return tables
 
     def executeNonQuery(self, sql, params=None):
-        """INSERT / UPDATE / DELETE / DDL - trả về số dòng bị ảnh hưởng."""
         cursor = self.conn.cursor()
         cursor.execute(sql, params)
         self.conn.commit()
@@ -64,7 +63,6 @@ class Connector:
         return rowcount
 
     def executeMany(self, sql, rows, batch_size=10_000):
-        """Chèn nhiều dòng theo lô để không vượt max_allowed_packet."""
         cursor = self.conn.cursor()
         total = 0
         try:
@@ -80,7 +78,6 @@ class Connector:
         return total
 
     def executeScript(self, path):
-        """Chạy file .sql nhiều câu lệnh (bỏ qua dòng comment)."""
         lines = [l for l in open(path, encoding="utf-8") if not l.strip().startswith("--")]
         for stmt in "".join(lines).split(";"):
             if stmt.strip():

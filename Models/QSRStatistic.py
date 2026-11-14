@@ -1,4 +1,3 @@
-"""Thống kê & trực quan hoá dữ liệu bán hàng QSR (nạp trực tiếp từ MySQL)."""
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -30,9 +29,8 @@ class QSRStatistic:
         self.connector = connector
         self.df = None
 
-    # ================================================================ nạp dữ liệu
+
     def execQSRHistory(self, restaurant_id=None, start=None, end=None):
-        """Nạp lịch sử bán hàng (join 5 bảng) từ MySQL thành một DataFrame phẳng."""
         sql, params = HISTORY_SQL + " WHERE 1=1", []
         if restaurant_id:
             sql += " AND s.restaurant_id = %s"; params.append(restaurant_id)
@@ -44,7 +42,7 @@ class QSRStatistic:
 
         df[Config.DATE_COL] = pd.to_datetime(df[Config.DATE_COL])
         for col in ["unit_price", "avg_temp_f", "precip_inches", "quantity_raw"]:
-            df[col] = df[col].astype(float)            # DECIMAL -> float
+            df[col] = df[col].astype(float)
         df["day_of_week_num"] = df[Config.DATE_COL].dt.day_of_week
         df["is_weekend"] = (df["day_of_week_num"] >= 5).astype("int8")
         df["month"] = df[Config.DATE_COL].dt.month
@@ -65,9 +63,8 @@ class QSRStatistic:
     def printDescribe(self):
         print(self.df.describe())
 
-    # ================================================================ thống kê
+
     def processCategoryDistribution(self):
-        """Tỉ trọng số lượng bán theo nhóm món."""
         return self.df.groupby("category", as_index=False)["quantity"].sum() \
                       .sort_values("quantity", ascending=False)
 
@@ -76,44 +73,36 @@ class QSRStatistic:
                       .sort_values("revenue", ascending=False)
 
     def processSalesByStore(self):
-        """Doanh số theo chi nhánh - hỗ trợ điều chỉnh kinh doanh theo khu vực."""
         return self.df.groupby(["restaurant_id", "restaurant_name"], as_index=False)[["quantity", "revenue"]] \
                       .sum().sort_values("revenue", ascending=False)
 
     def processTopItems(self, n=10, ascending=False):
-        """Top n món bán chạy nhất (ascending=True: bán chậm nhất)."""
         return self.df.groupby("menu_item_name", as_index=False)["quantity"].sum() \
                       .sort_values("quantity", ascending=ascending).head(n)
 
     def processDayOfWeekSales(self):
-        """Số lượng bán trung bình mỗi món theo thứ trong tuần."""
         out = self.df.groupby("day_of_week_num", as_index=False)["quantity"].mean()
         out["day_of_week"] = out["day_of_week_num"].map(dict(enumerate(DAY_NAMES)))
         return out
 
     def processMonthlySales(self):
-        """Biến động doanh số chung theo tháng (cộng dồn các năm)."""
         return self.df.groupby("month", as_index=False)[["quantity", "revenue"]].sum()
 
     def processYearMonthSales(self):
-        """Biến động doanh số theo năm và theo tháng."""
         return self.df.groupby(["year", "month"], as_index=False)["revenue"].sum()
 
     def processUpliftByFactor(self, factor):
-        """So sánh lượng bán trung bình có / không có một yếu tố (is_promotion, is_holiday, ...)."""
         out = self.df.groupby(factor, as_index=False)["quantity"].mean()
         base = out.loc[out[factor] == 0, "quantity"].iloc[0]
         out["uplift_pct"] = (out["quantity"] / base - 1) * 100
         return out
 
     def processUpliftByCategory(self, factor):
-        """Mức tăng (%) khi có yếu tố, tách theo nhóm món."""
         pv = self.df.pivot_table(index="category", columns=factor, values="quantity", aggfunc="mean")
         return ((pv[1] / pv[0] - 1) * 100).rename("uplift_pct").reset_index() \
                                           .sort_values("uplift_pct", ascending=False)
 
     def processWeatherImpact(self):
-        """Lượng bán trung bình theo loại thời tiết."""
         return self.df.groupby("precip_type", as_index=False)["quantity"].mean()
 
     def processTemperatureImpact(self, bins=(-30, 32, 50, 70, 120)):
@@ -122,7 +111,7 @@ class QSRStatistic:
         return self.df.groupby([temp, "category"], observed=True)["quantity"].mean() \
                       .unstack().reset_index().rename(columns={"avg_temp_f": "temp_range"})
 
-    # ================================================================ trực quan hoá
+
     @staticmethod
     def _show(fig, savePath):
         fig.tight_layout()
@@ -168,7 +157,6 @@ class QSRStatistic:
         self._show(fig, savePath)
 
     def visualizeMultiBarChart(self, df, columnX, title, savePath=None):
-        """Biểu đồ cột nhóm: mỗi cột còn lại của df là một nhóm."""
         fig, ax = plt.subplots(figsize=(11, 6))
         df.set_index(columnX).plot(kind="bar", ax=ax)
         ax.set_title(title)

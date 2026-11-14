@@ -1,4 +1,3 @@
-"""Kiểm tra kết nối MySQL.   Chạy: python -m Tests.TestConnector"""
 from Connectors.Connector import Connector
 
 connector = Connector()

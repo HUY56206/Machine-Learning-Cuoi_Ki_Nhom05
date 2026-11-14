@@ -1,4 +1,3 @@
-"""Nhắc nhân viên kiểm kho cuối ca. Chạy định kỳ (cron), ví dụ mỗi 15 phút: python manage.py send_reminders"""
 from django.core.management.base import BaseCommand
 
 from forecast.services import plans

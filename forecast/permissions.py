@@ -1,4 +1,3 @@
-"""Phân quyền theo vai trò (Profile.role)."""
 from functools import wraps
 
 from django.contrib.auth.views import redirect_to_login
@@ -16,7 +15,6 @@ def _role(request):
 
 
 def role_required(*roles):
-    """Trang HTML: chưa đăng nhập -> /login/; sai vai trò -> trang 'Không có quyền truy cập'."""
     def deco(view):
         @wraps(view)
         def wrapper(request, *args, **kwargs):
@@ -24,7 +22,7 @@ def role_required(*roles):
                 return redirect_to_login(request.get_full_path(), 'forecast:login')
             role = _role(request)
             if role in (Role.MANAGER, Role.STAFF) and not request.user.profile.store_id:
-                role = None                                        # chưa được gán cửa hàng -> coi như không có quyền
+                role = None
             if role not in roles:
                 return render(request, 'forecast/no_access.html', {'role': role or Role.MANAGER, 'active_menu': 'none'}, status=403)
             return view(request, *args, **kwargs)
@@ -33,7 +31,6 @@ def role_required(*roles):
 
 
 def api_role_required(*roles):
-    """API JSON: trả 401/403 thay vì chuyển hướng."""
     def deco(view):
         @wraps(view)
         def wrapper(request, *args, **kwargs):

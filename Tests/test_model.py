@@ -1,7 +1,3 @@
-"""Kiểm thử pipeline ML: chống rò rỉ dữ liệu, chia tập theo thời gian, đánh giá.
-
-Chạy:  python -m pytest Tests/ -v
-"""
 import numpy as np
 import pandas as pd
 import pytest
@@ -12,7 +8,6 @@ from Utils import Config
 
 
 def make_history(start="2025-05-01", end="2025-12-31"):
-    """2 chuỗi, quantity = số thứ tự ngày (R02 cộng thêm 1000) -> dễ kiểm tra lag bằng tay."""
     dates = pd.date_range(start, end)
     rows = []
     for store, offset in (("R01", 0), ("R02", 1000)):
@@ -40,7 +35,7 @@ def row(model, store, date):
 
 
 def test_lag_uses_only_past(model):
-    r = row(model, "R01", "2025-06-29")       # ngày thứ 59 -> quantity = 59
+    r = row(model, "R01", "2025-06-29")
     assert r["quantity"] == 59
     assert (r["lag_1"], r["lag_7"], r["lag_28"]) == (58, 52, 31)
 
@@ -75,6 +70,6 @@ def test_evaluate_excludes_imputed_rows(model):
     result = baseline.evaluate("test")
     test = baseline.test
     assert result.n_rows == int((test["is_imputed"] == 0).sum())
-    # quantity tăng 1 mỗi ngày -> seasonal naive (lag_7) luôn thấp hơn đúng 7
+
     assert result.MAE == pytest.approx(7)
     assert result.BIAS < 0

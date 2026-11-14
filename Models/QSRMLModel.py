@@ -1,17 +1,3 @@
-"""Lớp cơ sở cho mọi mô hình dự báo nhu cầu (BUILD MODEL & USE MODEL - Slide 08).
-
-    (5)  Filter & load data : execQSRHistory() -> processFeatures() -> splitTrainValTest()
-    (6)  Select algorithm   : lớp con (QSRRidgeRegression, QSRLightGBM, QSRCatBoost, QSRBaselineModel)
-    (7)  Train              : processTrain()
-    (8)  Evaluate           : evaluate() -> MetricsResult
-    (9)  Save model         : saveModel()
-    (10) Load model         : loadModel()
-    (11) Use model          : predict() / forecastDate()
-
-Bài toán: dự báo ngày mai (one-step-ahead). Tại ngày t, đặc trưng lịch sử chỉ dùng
-quantity đến ngày t-1; lịch, khuyến mãi, ngày lễ, sự kiện, thời tiết của ngày t
-được coi là đã biết trước.
-"""
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -25,7 +11,7 @@ from Utils.FileUtil import FileUtil
 
 class QSRMLModel(QSRStatistic):
     model_name = "base"
-    categorical_mode = "str"     # "str" (Ridge, CatBoost) | "category" (LightGBM)
+    categorical_mode = "str"
 
     def __init__(self, connector=None):
         super().__init__(connector)
@@ -33,7 +19,7 @@ class QSRMLModel(QSRStatistic):
         self.train = self.val = self.test = None
         self.trainedmodel = None
 
-    # ================================================================ (5) đặc trưng
+
     def processFeatures(self):
         df = self.df.copy()
         d = df[Config.DATE_COL]
@@ -41,7 +27,7 @@ class QSRMLModel(QSRStatistic):
         df["day_of_month"] = d.dt.day.astype("int16")
         df["day_of_year"] = d.dt.day_of_year.astype("int16")
 
-        # Ngày lễ chung toàn quốc -> hiệu ứng trước / sau lễ
+
         holidays = set(df.loc[df["is_holiday"] == 1, Config.DATE_COL].unique())
         df["is_holiday_tomorrow"] = (d + pd.Timedelta(days=1)).isin(holidays).astype("int8")
         df["is_holiday_yesterday"] = (d - pd.Timedelta(days=1)).isin(holidays).astype("int8")
@@ -51,20 +37,19 @@ class QSRMLModel(QSRStatistic):
         for k in Config.LAGS:
             df[f"lag_{k}"] = grp.shift(k)
 
-        # shift(1) trước rồi mới rolling -> không bao giờ chứa giá trị của ngày t
+
         shifted_grp = grp.shift(1).groupby([df[k] for k in Config.SERIES_KEYS], sort=False)
         for w in Config.ROLL_WINDOWS:
             df[f"roll_mean_{w}"] = shifted_grp.transform(lambda s: s.rolling(w, min_periods=w).mean())
             df[f"roll_std_{w}"] = shifted_grp.transform(lambda s: s.rolling(w, min_periods=w).std())
         df["dow_mean_4w"] = pd.concat([grp.shift(k) for k in (7, 14, 21, 28)], axis=1).mean(axis=1)
 
-        # Bỏ các ngày đầu chuỗi chưa đủ lịch sử (28 ngày)
+
         df = df.dropna(subset=[f"lag_{max(Config.LAGS)}", f"roll_std_{max(Config.ROLL_WINDOWS)}"])
         self.df_features = df.sort_values([Config.DATE_COL] + Config.SERIES_KEYS).reset_index(drop=True)
         return self.df_features
 
     def splitTrainValTest(self):
-        """Chia theo trục thời gian - không xáo trộn ngẫu nhiên."""
         d = self.df_features[Config.DATE_COL]
         self.train = self.df_features[d <= Config.TRAIN_END]
         self.val = self.df_features[d.between(Config.VAL_START, Config.VAL_END)]
@@ -84,7 +69,6 @@ class QSRMLModel(QSRStatistic):
             print(f"{name:5s}: {d.min():%Y-%m-%d} -> {d.max():%Y-%m-%d} | {len(part):>9,} dòng")
 
     def prepareX(self, df):
-        """Chọn đúng cột và kiểu dữ liệu mà mô hình đã thấy khi huấn luyện."""
         tm = self.trainedmodel
         X = df[tm.columns_input].copy()
         for col in tm.categorical_columns:
@@ -94,9 +78,8 @@ class QSRMLModel(QSRStatistic):
                 X[col] = X[col].astype(str)
         return X
 
-    # ================================================================ (6)(7) train
+
     def fitModel(self, X_train, y_train, X_val, y_val):
-        """Lớp con cài đặt: trả về (model, params)."""
         raise NotImplementedError
 
     def processTrain(self, columns_input=None, column_target=Config.TARGET):
@@ -115,13 +98,12 @@ class QSRMLModel(QSRStatistic):
         self.trainedmodel.params = params
         return self.trainedmodel
 
-    # ================================================================ (8) đánh giá
+
     def predict(self, df):
         y_hat = self.trainedmodel.model.predict(self.prepareX(df))
-        return np.clip(np.asarray(y_hat, dtype=float), 0, None)   # nhu cầu không âm
+        return np.clip(np.asarray(y_hat, dtype=float), 0, None)
 
     def evaluate(self, split="test"):
-        """Đánh giá trên giá trị gốc quantity_raw, bỏ các dòng do nhóm tự điền (imputed)."""
         df = {"train": self.train, "val": self.val, "test": self.test}[split]
         mask = (df["is_imputed"] == 0).to_numpy()
         y_true = df[Config.TARGET_RAW].to_numpy()[mask]
@@ -145,13 +127,6 @@ class QSRMLModel(QSRStatistic):
 
     @staticmethod
     def processResidualRMSE(df, y_pred, mask):
-        """RMSE theo từng (nhà hàng, món) trên validation -> đầu vào cho Safety Stock.
-
-        Safety Stock phải phản ánh độ dao động của NHU CẦU, nên bỏ thêm:
-        - outlier (lỗi ghi nhận, gấp ~5 lần bình thường)
-        - ngày bán = 0: mọi món đều có trung vị > 2/ngày, số 0 rải rác 1-2 ngày
-          -> dấu hiệu hết hàng (nhu cầu bị che khuất), không phải nhu cầu thật bằng 0.
-        """
         mask = mask & (df["is_outlier"] == 0).to_numpy() & (df[Config.TARGET_RAW] > 0).to_numpy()
         y_pred = pd.Series(y_pred, index=df.index)[mask]
         res = df.loc[mask, Config.SERIES_KEYS].assign(sq_err=(df.loc[mask, Config.TARGET_RAW] - y_pred) ** 2)
@@ -171,7 +146,6 @@ class QSRMLModel(QSRStatistic):
         self._show(fig, savePath)
 
     def saveMetricsReport(self, path=Config.REPORTS_DIR / "metrics.csv"):
-        """Ghi (hoặc cập nhật) kết quả của mô hình này vào bảng so sánh chung."""
         new = pd.DataFrame([m.toDict() for m in self.trainedmodel.metrics])
         path.parent.mkdir(parents=True, exist_ok=True)
         if path.exists():
@@ -180,7 +154,7 @@ class QSRMLModel(QSRStatistic):
         new.to_csv(path, index=False)
         return new
 
-    # ================================================================ (9)(10) lưu / nạp
+
     def saveModel(self, fileName):
         return FileUtil.saveModel(self.trainedmodel, fileName)
 
@@ -190,13 +164,8 @@ class QSRMLModel(QSRStatistic):
             self.model_name = self.trainedmodel.model_name
         return self.trainedmodel
 
-    # ================================================================ (11) sử dụng
-    def forecastDate(self, forecast_date, restaurant_id=None):
-        """Dự báo nhu cầu của mọi món (của một / mọi nhà hàng) cho một ngày.
 
-        Cần đã gọi execQSRHistory() với dữ liệu ít nhất 28 ngày trước forecast_date
-        và processFeatures().
-        """
+    def forecastDate(self, forecast_date, restaurant_id=None):
         day = self.df_features[self.df_features[Config.DATE_COL] == pd.Timestamp(forecast_date)]
         if restaurant_id:
             day = day[day["restaurant_id"] == restaurant_id]

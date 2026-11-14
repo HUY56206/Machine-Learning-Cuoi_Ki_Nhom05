@@ -1,4 +1,3 @@
-"""Hồi quy tuyến tính có điều chuẩn L2 (Ridge) - mô hình tuyến tính của bài giảng."""
 from sklearn.compose import ColumnTransformer
 from sklearn.linear_model import Ridge
 from sklearn.pipeline import Pipeline
@@ -24,7 +23,6 @@ class QSRRidgeRegression(QSRMLModel):
         ])
 
     def fitModel(self, X_train, y_train, X_val, y_val):
-        """Chọn alpha có wMAPE thấp nhất trên validation."""
         best, best_alpha, best_score = None, None, float("inf")
         for alpha in self.ALPHAS:
             pipe = self.buildPipeline(alpha).fit(X_train, y_train)

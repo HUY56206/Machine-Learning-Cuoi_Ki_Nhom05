@@ -1,14 +1,10 @@
-/* QSR Forecast – hệ thống popup dùng chung.
- * Mỗi popup trong thiết kế được dựng từ 7 kiểu: alert, loading, info, choice, confirm, form, calendar/table.
- * Các nút kích hoạt popup khai báo bằng data-act="..."; luồng xử lý nằm trong ACTIONS bên dưới.
- * Phần "giả lập máy chủ" (later/flow) cần thay bằng gọi API Django khi có backend. */
+
 (function () {
   'use strict';
 
   var DEMO_DATE = '31/10/2025';
   var URLS = window.QSR_URLS || {};
   var ROLE = document.body.getAttribute('data-role') || 'manager';
-
 
   var CHOICES = {
     accounts: { title: 'Chọn tài khoản đăng nhập', get options() {
@@ -29,7 +25,6 @@
       get options() { return (window.QSR_DATA || {}).scopes || ['Toàn hệ thống']; } }
   };
 
-  /* ---------- tiện ích ---------- */
   function esc(s) {
     return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
       return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
@@ -758,7 +753,6 @@
       alertBox({ type: 'warning', title: 'Quy trình phê duyệt bắt buộc', text: 'Quản lý phải duyệt trước khi danh sách được chuyển sang giao diện bếp.' });
     }
   };
-
 
   /* ---------- hành động của quản trị viên (API thật) ---------- */
   var REQUIRED_COLS = {

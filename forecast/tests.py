@@ -1,8 +1,3 @@
-"""Kiểm thử nghiệp vụ & phân quyền. Mô hình ML được giả lập (engine.forecast_store) để bài test chạy nhanh.
-
-    python manage.py test forecast
-Bảng của pipeline ML (stores, products...) là managed=False nên test tự tạo trong CSDL test.
-"""
 import datetime
 import json
 from unittest import mock
@@ -22,7 +17,6 @@ SERVICE = datetime.date(2025, 10, 31)
 
 
 def fake_forecast(store_id, service_date, z=1.65):
-    """3 món: M01 dự báo 100 / an toàn 20, M02 50 / 10, M03 5 / 2."""
     return pd.DataFrame({
         'menu_item_id': ['M01', 'M02', 'M03'], 'predicted_qty': [100.4, 50.0, 5.0],
         'safety_stock': [19.2, 10.0, 2.0], 'baseline_qty': [80.0, 40.0, 4.0], 'model_name': 'catboost'})
@@ -69,9 +63,9 @@ class Base(TestCase):
 
 class PlanLogicTests(Base):
     def test_compute_line_levels(self):
-        self.assertEqual(plans.compute_line(100, 20, 5), (115, PrepLine.Level.SHORT))       # tồn < an toàn
-        self.assertEqual(plans.compute_line(100, 20, 30), (90, PrepLine.Level.TOPUP))       # tồn ≥ an toàn, vẫn cần chuẩn bị
-        self.assertEqual(plans.compute_line(10, 2, 50), (0, PrepLine.Level.OK))             # dư hàng
+        self.assertEqual(plans.compute_line(100, 20, 5), (115, PrepLine.Level.SHORT))
+        self.assertEqual(plans.compute_line(100, 20, 30), (90, PrepLine.Level.TOPUP))
+        self.assertEqual(plans.compute_line(10, 2, 50), (0, PrepLine.Level.OK))
         self.assertEqual(plans.compute_line(100, 20, 0, pct=10), (130, PrepLine.Level.SHORT))
 
     @mock.patch.object(engine, 'save_raw_forecasts', return_value=3)
@@ -87,8 +81,8 @@ class PlanLogicTests(Base):
         self.count(self.r01, {'M01': 5, 'M02': 30, 'M03': 100})
         plan = plans.create_plan(self.r01, SERVICE, self.users['mgr1'])
         lines = {l.product_id: l for l in plan.lines.all()}
-        self.assertEqual((lines['M01'].need_qty, lines['M01'].level), (115, 'short'))        # 100+20-5
-        self.assertEqual((lines['M02'].need_qty, lines['M02'].level), (30, 'topup'))         # 50+10-30
+        self.assertEqual((lines['M01'].need_qty, lines['M01'].level), (115, 'short'))
+        self.assertEqual((lines['M02'].need_qty, lines['M02'].level), (30, 'topup'))
         self.assertEqual((lines['M03'].need_qty, lines['M03'].level), (0, 'ok'))
         self.assertEqual(plan.status, PrepPlan.Status.PENDING)
         self.assertEqual(Notification.objects.filter(kind="shortage", store=self.r01).count(), 1)
@@ -101,14 +95,14 @@ class PlanLogicTests(Base):
         v1 = plans.create_plan(self.r01, SERVICE, mgr)
         plans.approve(v1, mgr)
         self.assertTrue(plans.is_locked(plans.working_plan(self.r01, SERVICE)))
-        with self.assertRaises(plans.PlanError) as ctx:                                       # đã duyệt -> không chạy lại
+        with self.assertRaises(plans.PlanError) as ctx:
             plans.create_plan(self.r01, SERVICE, mgr)
         self.assertEqual(ctx.exception.code, 'approved')
 
         plans.reopen(v1)
         v2 = plans.create_plan(self.r01, SERVICE, mgr)
         self.assertEqual(v2.version, 2)
-        self.assertEqual(plans.kitchen_plan(self.r01, SERVICE).pk, v1.pk)                     # bếp vẫn thấy bản đã duyệt cũ
+        self.assertEqual(plans.kitchen_plan(self.r01, SERVICE).pk, v1.pk)
         plans.approve(v2, mgr)
         self.assertEqual(plans.kitchen_plan(self.r01, SERVICE).pk, v2.pk)
         v1.refresh_from_db()
@@ -116,36 +110,34 @@ class PlanLogicTests(Base):
 
     @mock.patch.object(engine, 'forecast_store', side_effect=fake_forecast)
     def test_raw_forecasts_saved_only_after_commit(self, *_):
-        """Ghi bảng forecasts (kết nối riêng, khóa ngoại tới stores) phải chạy SAU khi giao dịch xong,
-        nếu không sẽ bị chặn bởi khóa dòng cửa hàng đến hết thời gian chờ (50 giây)."""
         self.count(self.r01, {'M01': 5, 'M02': 5, 'M03': 5})
         with mock.patch.object(engine, 'save_raw_forecasts', return_value=3) as saver:
             with self.captureOnCommitCallbacks(execute=False) as callbacks:
                 plans.create_plan(self.r01, SERVICE, self.users['mgr1'])
-            self.assertEqual(saver.call_count, 0)                    # chưa ghi khi giao dịch còn mở
+            self.assertEqual(saver.call_count, 0)
             for cb in callbacks:
                 cb()
-            self.assertEqual(saver.call_count, 1)                    # ghi sau khi commit
+            self.assertEqual(saver.call_count, 1)
 
     @mock.patch.object(engine, 'save_raw_forecasts', return_value=3)
     @mock.patch.object(engine, 'forecast_store', side_effect=fake_forecast)
     def test_adjustment_and_line_edit(self, *_):
         self.count(self.r01, {'M01': 5, 'M02': 30, 'M03': 100})
         plan = plans.create_plan(self.r01, SERVICE, self.users['mgr1'])
-        with self.assertRaises(plans.PlanError):                                              # khác 0% bắt buộc có lý do
+        with self.assertRaises(plans.PlanError):
             plans.set_adjustment(plan, 15, '')
         with self.assertRaises(plans.PlanError):
             plans.set_adjustment(plan, 50, 'Sự kiện')
-        with self.assertRaises(plans.PlanError):                                              # chỉ 5 mức −30/−15/0/+15/+30
+        with self.assertRaises(plans.PlanError):
             plans.set_adjustment(plan, 10, 'Sự kiện')
         plans.set_adjustment(plan, 15, 'Sự kiện tại cửa hàng')
         m01 = plan.lines.get(product_id='M01')
-        self.assertEqual(m01.need_qty, 130)                                                   # 115+20-5
+        self.assertEqual(m01.need_qty, 130)
         plans.set_line_qty(m01, 140)
         m01.refresh_from_db()
         self.assertEqual((m01.need_qty, m01.applied_qty), (130, 140))
         plans.approve(plan, self.users['mgr1'])
-        with self.assertRaises(plans.PlanError):                                              # đã duyệt -> không sửa
+        with self.assertRaises(plans.PlanError):
             plans.set_line_qty(m01, 1)
 
     @mock.patch.object(engine, 'forecast_store', side_effect=engine.NoForecastData('x'))
@@ -160,7 +152,7 @@ class InventoryTests(Base):
     def test_draft_then_final_requires_all_items(self):
         stf = self.users['stf1']
         plans.save_inventory(self.r01, OP_DATE, stf, {'M01': 3, 'M02': None}, draft=True)
-        plans.save_inventory(self.r01, OP_DATE, stf, {'M01': 4}, draft=True)                 # nháp ghi đè, không nhân bản
+        plans.save_inventory(self.r01, OP_DATE, stf, {'M01': 4}, draft=True)
         self.assertEqual(InventoryCount.objects.filter(status='draft').count(), 1)
         with self.assertRaises(plans.PlanError) as ctx:
             plans.save_inventory(self.r01, OP_DATE, stf, {'M01': 3, 'M02': 4}, draft=False)
@@ -178,7 +170,7 @@ class InventoryTests(Base):
         count, plan = plans.save_inventory(self.r01, OP_DATE, stf, {'M01': 5, 'M02': 30, 'M03': 100}, draft=False)
         self.assertIsNotNone(plan)
         self.assertEqual(count.items.get(product_id='M01').prev_quantity, 40)
-        self.assertTrue(count.items.get(product_id='M01').needs_review)                      # 5 < 25% của 40
+        self.assertTrue(count.items.get(product_id='M01').needs_review)
         self.assertFalse(count.items.get(product_id='M02').needs_review)
         self.assertTrue(Notification.objects.filter(kind='inventory').exists())
 
@@ -189,7 +181,7 @@ class InventoryTests(Base):
             self.count(self.r01, {'M01': 5, 'M02': 30, 'M03': 100})
             plans.approve(plans.create_plan(self.r01, SERVICE, mgr), mgr)
             _, plan = plans.save_inventory(self.r01, OP_DATE, stf, {'M01': 1, 'M02': 1, 'M03': 1}, draft=False)
-        self.assertIsNone(plan)                                                                # giữ nguyên danh sách đã duyệt
+        self.assertIsNone(plan)
 
 
 class PermissionTests(Base):
@@ -222,7 +214,7 @@ class PermissionTests(Base):
         ok = self.client.post('/login/', {'username': 'mgr1', 'password': 'pw-12345-abc'})
         self.assertEqual(ok.json(), {'ok': True, 'next': '/dashboard/'})
         evil = self.client.post('/login/', {'username': 'mgr1', 'password': 'pw-12345-abc', 'next': 'https://evil.example/'})
-        self.assertEqual(evil.json()['next'], '/dashboard/')                                  # không chuyển hướng ra ngoài
+        self.assertEqual(evil.json()['next'], '/dashboard/')
 
     @mock.patch.object(engine, 'save_raw_forecasts', return_value=3)
     @mock.patch.object(engine, 'forecast_store', side_effect=fake_forecast)
@@ -271,7 +263,6 @@ class PermissionTests(Base):
 
 
 class Phase1LogicTests(Base):
-    """Các điểm lệch so với mô tả nghiệp vụ đã được sửa."""
 
     def setUp(self):
         super().setUp()
@@ -282,7 +273,7 @@ class Phase1LogicTests(Base):
         self.addCleanup(patch1.stop), self.addCleanup(patch2.stop)
         self.mgr, self.stf = self.users['mgr1'], self.users['stf1']
 
-    def test_any_date_can_be_forecast(self):                                                 # A1
+    def test_any_date_can_be_forecast(self):
         for day in (SERVICE + datetime.timedelta(days=1), OP_DATE):
             self.assertEqual(plans.create_plan(self.r01, day, self.mgr).service_date, day)
 
@@ -293,7 +284,7 @@ class Phase1LogicTests(Base):
             with self.assertRaises(plans.PlanError) as ctx:
                 plans.create_plan(self.r01, day, self.mgr)
             self.assertEqual(ctx.exception.code, 'train_data')
-        self.assertEqual(plans.create_plan(self.r01, first, self.mgr).service_date, first)   # ngày đầu validation được phép
+        self.assertEqual(plans.create_plan(self.r01, first, self.mgr).service_date, first)
 
     def test_date_without_input_data_reports_no_data(self):
         with mock.patch.object(engine, 'forecast_store', side_effect=engine.NoForecastData('x')):
@@ -301,24 +292,24 @@ class Phase1LogicTests(Base):
                 plans.create_plan(self.r01, SERVICE + datetime.timedelta(days=400), self.mgr)
         self.assertEqual(ctx.exception.code, 'no_data')
 
-    def test_no_approval_required_sends_to_kitchen(self):                                    # A2
+    def test_no_approval_required_sends_to_kitchen(self):
         SystemConfig.objects.filter(pk=1).update(require_approval=False)
         plan = plans.create_plan(self.r01, SERVICE, self.mgr)
         self.assertEqual(plan.status, PrepPlan.Status.APPROVED)
         self.assertEqual(plans.kitchen_plan(self.r01, SERVICE).pk, plan.pk)
-        again = plans.create_plan(self.r01, SERVICE, self.mgr)                              # không khóa khi không cần duyệt
+        again = plans.create_plan(self.r01, SERVICE, self.mgr)
         self.assertEqual(plans.kitchen_plan(self.r01, SERVICE).pk, again.pk)
 
     def test_pending_plan_hidden_from_kitchen(self):
         plans.create_plan(self.r01, SERVICE, self.mgr)
         self.assertIsNone(plans.kitchen_plan(self.r01, SERVICE))
 
-    def test_red_alert_off_skips_shortage_notification(self):                                # A3
+    def test_red_alert_off_skips_shortage_notification(self):
         SystemConfig.objects.filter(pk=1).update(alert_red=False)
         plans.create_plan(self.r01, SERVICE, self.mgr)
         self.assertFalse(Notification.objects.filter(kind='shortage').exists())
 
-    def test_completion_notifies_manager(self):                                              # bước 6
+    def test_completion_notifies_manager(self):
         plan = plans.approve(plans.create_plan(self.r01, SERVICE, self.mgr), self.mgr)
         todo = list(plans.actionable_lines(plan))
         for line in todo[:-1]:
@@ -328,7 +319,7 @@ class Phase1LogicTests(Base):
         self.assertTrue(plans.is_complete(plan))
         self.assertTrue(Notification.objects.filter(role='manager', title='Chuẩn bị hàng đã hoàn tất').exists())
 
-    def test_event_notification_and_prefs(self):                                             # sự kiện + tùy chọn hồ sơ (A7)
+    def test_event_notification_and_prefs(self):
         WeatherEvent.objects.create(restaurant=self.r01, event_date=SERVICE, avg_temp_f=50, precip_inches=0, precip_type='None',
                                     is_special_event=True, special_event_name='Halloween')
         plans.create_plan(self.r01, SERVICE, self.mgr)
@@ -339,7 +330,7 @@ class Phase1LogicTests(Base):
         self.mgr.refresh_from_db()
         self.assertNotIn('shortage', set(visible_for(User.objects.get(pk=self.mgr.pk)).values_list('kind', flat=True)))
 
-    def test_inventory_reminder(self):                                                       # A3
+    def test_inventory_reminder(self):
         InventoryCount.objects.all().delete()
         early = datetime.datetime(2025, 10, 30, 20, 0, tzinfo=datetime.timezone.utc).astimezone()
         late = early.replace(hour=22)
@@ -348,7 +339,7 @@ class Phase1LogicTests(Base):
         self.count(self.r01, {'M01': 1, 'M02': 1, 'M03': 1})
         self.assertEqual(plans.send_inventory_reminders(late), 0)
 
-    def test_login_remember_and_throttle(self):                                              # A6
+    def test_login_remember_and_throttle(self):
         ok = self.client.post('/login/', {'username': 'mgr1', 'password': 'pw-12345-abc'})
         self.assertTrue(ok.json()['ok'])
         self.assertTrue(self.client.session.get_expire_at_browser_close())
@@ -376,13 +367,12 @@ class Phase1LogicTests(Base):
         data = self.client.get(f'/api/line/{plan.lines.get(product_id="M01").pk}/reason/').json()
         self.assertTrue(data['ok'])
         self.assertEqual(data['similar'], [{'date': '24/10/2025', 'qty': 70}])
-        self.assertIsNone(data['contrib'])                                                     # SHAP lỗi: popup vẫn mở
+        self.assertIsNone(data['contrib'])
         self.client.force_login(self.users['mgr2'])
         self.assertEqual(self.client.get(f'/api/line/{plan.lines.first().pk}/reason/').status_code, 404)
 
 
 class AdminOpsTests(Base):
-    """Backend quản trị viên: tài khoản, cửa hàng, cấu hình, nhập dữ liệu, chạy dự báo."""
 
     def setUp(self):
         super().setUp()
@@ -390,7 +380,7 @@ class AdminOpsTests(Base):
         self.ops = adminops
         self.adm = self.users['adm']
 
-    # ---- tài khoản
+
     def test_account_rules(self):
         ops = self.ops
         user, temp = ops.save_account('', 'Nhân viên mới', 'new.r01', 'Nhân viên bếp/kho', 'R01 · Downtown')
@@ -398,32 +388,32 @@ class AdminOpsTests(Base):
         self.assertEqual((user.profile.role, user.profile.store_id), ('staff', 'R01'))
         for args, code in [(('', 'X', 'new.r01', 'Nhân viên bếp/kho', 'R01 · D'), 'duplicate'),
                            (('', 'X', 'Bad Name', 'Nhân viên bếp/kho', 'R01 · D'), 'invalid'),
-                           (('', 'X', 'abc.def', 'Quản lý cửa hàng', 'R01 · D'), 'manager_conflict'),   # R01 đã có mgr1
+                           (('', 'X', 'abc.def', 'Quản lý cửa hàng', 'R01 · D'), 'manager_conflict'),
                            (('', 'X', 'abc.def', 'Quản lý cửa hàng', 'Toàn hệ thống'), 'scope'),
                            (('', 'X', 'abc.def', 'Quản trị viên', 'R01 · D'), 'scope'),
                            (('', '', 'abc.def', 'Quản trị viên', 'Toàn hệ thống'), 'missing')]:
             with self.assertRaises(ops.AdminError) as ctx:
                 ops.save_account(*args)
             self.assertEqual(ctx.exception.code, code, args)
-        ops.save_account('new.r01', 'Đổi tên', 'new.r01', 'Nhân viên bếp/kho', 'R02 · Wrigley')      # sửa: đổi cửa hàng
+        ops.save_account('new.r01', 'Đổi tên', 'new.r01', 'Nhân viên bếp/kho', 'R02 · Wrigley')
         self.assertEqual(User.objects.get(username='new.r01').profile.store_id, 'R02')
-        with self.assertRaises(ops.AdminError) as ctx:                                                # quản trị viên cuối cùng
+        with self.assertRaises(ops.AdminError) as ctx:
             ops.save_account('adm', 'Admin', 'adm', 'Nhân viên bếp/kho', 'R02 · Wrigley')
         self.assertEqual(ctx.exception.code, 'last_admin')
 
     def test_disable_and_reset(self):
         ops = self.ops
         with self.assertRaises(ops.AdminError):
-            ops.set_active('adm', self.adm, False)                                                    # không tự khóa mình
+            ops.set_active('adm', self.adm, False)
         ops.set_active('stf1', self.adm, False)
         self.assertFalse(self.client.login(username='stf1', password='pw-12345-abc'))
         self.assertEqual(self.client.post('/login/', {'username': 'stf1', 'password': 'pw-12345-abc'}).status_code, 400)
         user, temp = ops.reset_password('mgr1')
         self.assertTrue(User.objects.get(username='mgr1').check_password(temp))
         with self.assertRaises(ops.AdminError):
-            ops.reset_password('stf1')                                                                # đã vô hiệu hóa
+            ops.reset_password('stf1')
 
-    # ---- cửa hàng
+
     def test_store_save_and_assign_manager(self):
         ops = self.ops
         store, _ = ops.save_store('r03', 'Indy', 'Indianapolis, in', creating=True)
@@ -433,7 +423,7 @@ class AdminOpsTests(Base):
             with self.assertRaises(ops.AdminError) as ctx:
                 ops.save_store(*args)
             self.assertEqual(ctx.exception.code, code)
-        # gán mgr1 (đang ở R01) sang R02: mgr2 bị thay, R01 thành chưa gán
+
         replaced = ops.assign_manager(self.r02, 'mgr1')
         self.assertEqual(replaced, 'mgr2')
         self.assertEqual(Profile.objects.get(user__username='mgr1').store_id, 'R02')
@@ -441,14 +431,14 @@ class AdminOpsTests(Base):
         ops.assign_manager(self.r02, 'Chưa gán')
         self.assertIsNone(Profile.objects.get(user__username='mgr1').store_id)
 
-    # ---- cấu hình
+
     def test_config_save(self):
         ops = self.ops
         ops.save_config({'service_level': '99% (z = 2,33)', 'prep_deadline': '09:00', 'inventory_reminder': '22:00',
                          'alert_red': False, 'require_approval': False})
         cfg = SystemConfig.get()
         self.assertEqual((cfg.service_level, cfg.z, str(cfg.prep_deadline)[:5], cfg.alert_red), (99, 2.33, '09:00', False))
-        self.assertTrue(cfg.require_approval)                                                         # chỉ đổi được trong Django Admin
+        self.assertTrue(cfg.require_approval)
         for bad in ({'service_level': '80%', 'prep_deadline': '09:00', 'inventory_reminder': '22:00'},
                     {'service_level': '95%', 'prep_deadline': '12:00', 'inventory_reminder': '22:00'}):
             with self.assertRaises(ops.AdminError):
@@ -465,7 +455,7 @@ class AdminOpsTests(Base):
                 ops.save_config({**base, 'operating_date': bad})
         self.assertEqual(SystemConfig.get().operating_date, dt.date(2025, 12, 12))
 
-    # ---- nhập dữ liệu
+
     def csv(self, text):
         return text.encode('utf-8')
 
@@ -473,12 +463,12 @@ class AdminOpsTests(Base):
         ops = self.ops
         DailySale.objects.create(sale_id=1, sale_date=SERVICE, restaurant=self.r01, product_id='M01', quantity=10, quantity_raw=None, is_imputed=True)
         raw = self.csv('sale_date,restaurant_id,menu_item_id,quantity\n'
-                       '2025-10-31,R01,M01,25\n'          # khóa đã có
-                       '2025-10-31,R01,M02,30\n'          # mới
-                       '31/10/2025,R02,M03,7\n'           # mới (định dạng dd/mm/yyyy)
-                       '2025-10-31,R99,M01,5\n'           # cửa hàng sai
-                       '2025-10-31,R01,M01,3\n'           # trùng khóa trong tệp
-                       '2025-10-31,R01,M03,-4\n')         # số âm
+                       '2025-10-31,R01,M01,25\n'
+                       '2025-10-31,R01,M02,30\n'
+                       '31/10/2025,R02,M03,7\n'
+                       '2025-10-31,R99,M01,5\n'
+                       '2025-10-31,R01,M01,3\n'
+                       '2025-10-31,R01,M03,-4\n')
         add = ops.analyse_import('Bán hàng hằng ngày', 'Thêm dữ liệu mới', 'a.csv', raw)
         self.assertEqual((len(add['new']), len(add['update']), add['skipped'], add['invalid']), (2, 0, 2, 2))
         upd = ops.analyse_import('Bán hàng hằng ngày', 'Cập nhật theo khóa', 'a.csv', raw)
@@ -489,7 +479,7 @@ class AdminOpsTests(Base):
         self.assertEqual(DailySale.objects.get(restaurant_id='R01', product_id='M02').quantity, 30)
         ops.commit_import('Bán hàng hằng ngày', 'Cập nhật theo khóa', 'a.csv', raw)
         first = DailySale.objects.get(sale_id=1)
-        self.assertEqual((first.quantity, first.quantity_raw, first.is_imputed), (25, 25, False))     # dòng thiếu được bù bằng số thật
+        self.assertEqual((first.quantity, first.quantity_raw, first.is_imputed), (25, 25, False))
         self.assertEqual(ops.missing_summary(SERVICE, SERVICE)['missing'], 0)
 
     def test_import_columns_and_errors(self):
@@ -510,13 +500,13 @@ class AdminOpsTests(Base):
         self.assertEqual((res['inserted'], res['invalid']), (1, 1))
         h = self.csv('event_date,restaurant_id,is_special_event,special_event_name\n2025-10-31,R01,1,Halloween\n2025-11-01,R01,1,X\n')
         res = ops.commit_import('Ngày lễ & sự kiện', 'Cập nhật theo khóa', 'h.csv', h)
-        self.assertEqual((res['updated'], res['skipped']), (1, 1))                                     # ngày chưa có thời tiết thì bỏ qua
+        self.assertEqual((res['updated'], res['skipped']), (1, 1))
         ev = WeatherEvent.objects.get(restaurant_id='R01', event_date=SERVICE)
         self.assertEqual((ev.is_special_event, ev.special_event_name), (True, 'Halloween'))
         promo = self.csv('promo_date,restaurant_id,menu_item_id\n2025-10-31,R01,M01\n2025-10-31,R01,M01\n')
         self.assertEqual(ops.commit_import('Khuyến mãi', 'Thêm dữ liệu mới', 'p.csv', promo)['inserted'], 1)
 
-    # ---- chạy dự báo
+
     @mock.patch.object(engine, 'save_raw_forecasts', return_value=3)
     @mock.patch.object(engine, 'forecast_store', side_effect=fake_forecast)
     def test_run_all_skips_without_inventory_or_approved(self, *_):
@@ -525,11 +515,11 @@ class AdminOpsTests(Base):
         self.assertEqual(out['done'], ['R01'])
         self.assertEqual(out['skipped'], {'R02': 'no_inventory'})
         plans.approve(plans.working_plan(self.r01, SERVICE), self.users['mgr1'])
-        self.assertEqual(self.ops.run_all(self.adm)['skipped']['R01'], 'approved')                     # đã duyệt thì không chạy lại
+        self.assertEqual(self.ops.run_all(self.adm)['skipped']['R01'], 'approved')
         rows = {r['store'].pk: r['label'] for r in self.ops.store_runs()}
         self.assertEqual(rows, {'R01': 'Đã duyệt', 'R02': 'Chưa có kiểm kho'})
 
-    # ---- API: chỉ quản trị viên
+
     def test_admin_api_permissions(self):
         urls = ['/api/admin/forecast/run/', '/api/admin/forecast/run-all/', '/api/admin/stores/save/',
                 '/api/admin/accounts/save/', '/api/admin/accounts/disable/', '/api/admin/accounts/reset-password/',
@@ -554,7 +544,6 @@ class AdminOpsTests(Base):
 
 
 class Round2FixTests(Base):
-    """Các lỗi tìm ra ở lượt kiểm thử 2 (mã lỗi theo báo cáo kiểm thử lượt 2)."""
 
     def setUp(self):
         super().setUp()
@@ -565,40 +554,40 @@ class Round2FixTests(Base):
             p.start()
             self.addCleanup(p.stop)
 
-    def test_rerun_keeps_adjustment_and_manual_edits(self):                                      # L3, L9
+    def test_rerun_keeps_adjustment_and_manual_edits(self):
         v1 = plans.create_plan(self.r01, SERVICE, self.mgr)
         plans.set_adjustment(v1, 15, 'Khuyến mãi')
         plans.set_line_qty(v1.lines.get(product_id='M02'), 99)
         v2 = plans.create_plan(self.r01, SERVICE, self.mgr)
         self.assertEqual((v2.version, v2.adjustment_pct, v2.adjustment_reason), (2, 15, 'Khuyến mãi'))
         m01, m02 = v2.lines.get(product_id='M01'), v2.lines.get(product_id='M02')
-        self.assertEqual(m01.applied_qty, 130)                                                    # 115+20-5, đã áp +15%
-        self.assertEqual((m02.need_qty, m02.applied_qty), (38, 99))                               # 58+10-30; giữ số sửa tay
+        self.assertEqual(m01.applied_qty, 130)
+        self.assertEqual((m02.need_qty, m02.applied_qty), (38, 99))
 
-    def test_rerun_after_staff_recount_keeps_manual_edit(self):                                   # L3
+    def test_rerun_after_staff_recount_keeps_manual_edit(self):
         v1 = plans.create_plan(self.r01, SERVICE, self.mgr)
         plans.set_line_qty(v1.lines.get(product_id='M01'), 100)
         _, v2 = plans.save_inventory(self.r01, OP_DATE, self.users['stf1'], {'M01': 0, 'M02': 30, 'M03': 100}, draft=False)
         m01 = v2.lines.get(product_id='M01')
         self.assertEqual((m01.need_qty, m01.applied_qty), (120, 100))
 
-    def test_adjustment_keeps_manual_edit(self):                                                  # L10
+    def test_adjustment_keeps_manual_edit(self):
         plan = plans.create_plan(self.r01, SERVICE, self.mgr)
         plans.set_line_qty(plan.lines.get(product_id='M01'), 160)
         plans.set_adjustment(plan, 30, 'Sự kiện tại cửa hàng')
         m01, m02 = plan.lines.get(product_id='M01'), plan.lines.get(product_id='M02')
-        self.assertEqual((m01.need_qty, m01.applied_qty), (145, 160))                             # 130+20-5; giữ 160
-        self.assertEqual(m02.applied_qty, 45)                                                     # 65+10-30, tính lại theo %
+        self.assertEqual((m01.need_qty, m01.applied_qty), (145, 160))
+        self.assertEqual(m02.applied_qty, 45)
 
-    def test_prep_page_shows_adjusted_forecast(self):                                             # L11
+    def test_prep_page_shows_adjusted_forecast(self):
         plan = plans.create_plan(self.r01, SERVICE, self.mgr)
         plans.set_adjustment(plan, 30, 'Sự kiện tại cửa hàng')
         self.client.force_login(self.mgr)
-        self.assertContains(self.client.get('/prep/?date=31/10/2025&level=all'), 'data-fc="130"')  # 100 × 1,3
+        self.assertContains(self.client.get('/prep/?date=31/10/2025&level=all'), 'data-fc="130"')
         csv_text = self.client.get('/prep/export/?date=31/10/2025').content.decode('utf-8-sig')
         self.assertIn('Classic Cheeseburger,chiếc,130,20,5,145,145,Thiếu hàng', csv_text)
 
-    def test_reopen_button_and_locked_run(self):                                                  # L1, L5, L6
+    def test_reopen_button_and_locked_run(self):
         plan = plans.create_plan(self.r01, SERVICE, self.mgr)
         plans.approve(plan, self.mgr)
         self.client.force_login(self.mgr)
@@ -612,21 +601,21 @@ class Round2FixTests(Base):
         self.assertNotRegex(page, r'data-act="prep-run" data-date="[^"]*" disabled ')
         self.assertIn('Đã mở lại', page)
 
-    def test_auto_publish_has_no_approver(self):                                                  # L18
+    def test_auto_publish_has_no_approver(self):
         SystemConfig.objects.filter(pk=1).update(require_approval=False)
         plan = plans.create_plan(self.r01, SERVICE, self.users['stf1'])
         self.assertEqual((plan.status, plan.approved_by), (PrepPlan.Status.APPROVED, None))
         self.client.force_login(self.users['stf1'])
         self.assertContains(self.client.get('/staff/prep/'), 'Tự động gửi bếp')
 
-    def test_dashboard_chart_uses_forecasts_after_operating_date(self):                         # L7
+    def test_dashboard_chart_uses_forecasts_after_operating_date(self):
         plans.create_plan(self.r01, SERVICE, self.mgr)
         self.client.force_login(self.mgr)
         r = self.client.get('/dashboard/?date=05/11/2025')
         bar = next(b for b in r.context['bars'] if b['label'] == SERVICE)
-        self.assertEqual((bar['value'], bar['forecast']), (155, True))                             # 100+50+5
+        self.assertEqual((bar['value'], bar['forecast']), (155, True))
 
-    def test_server_error_message_is_generic(self):                                              # L12
+    def test_server_error_message_is_generic(self):
         self.client.force_login(self.mgr)
         with mock.patch.object(plans, 'create_plan', side_effect=RuntimeError("(1062, Duplicate entry 'x')")):
             r = self.post(self.client, '/api/forecast/run/', {'date': '31/10/2025'})
@@ -635,12 +624,12 @@ class Round2FixTests(Base):
 
 
 class Round2SecurityTests(Base):
-    def test_login_page_lists_only_demo_accounts(self):                                          # L2
+    def test_login_page_lists_only_demo_accounts(self):
         r = self.client.get('/login/')
         self.assertNotContains(r, 'mgr1')
         self.assertNotContains(r, 'stf1')
 
-    def test_password_reset_same_answer_and_rate_limited(self):                                  # L16
+    def test_password_reset_same_answer_and_rate_limited(self):
         from django.core.cache import cache
         cache.clear()
         self.addCleanup(cache.clear)
@@ -652,7 +641,7 @@ class Round2SecurityTests(Base):
         self.assertEqual(self.post(self.client, '/api/password-reset/', {'username': 'mgr1'}).status_code, 429)
         self.assertEqual(Notification.objects.filter(title__startswith='Yêu cầu cấp lại mật khẩu').count(), 1)
 
-    def test_model_page_opens_without_model_file(self):                                          # L19
+    def test_model_page_opens_without_model_file(self):
         self.client.force_login(self.users['adm'])
         with mock.patch.object(engine, 'trained_model', side_effect=RuntimeError('missing')):
             r = self.client.get('/admin-model/')
@@ -668,7 +657,6 @@ FAKE_SHAP = (25.0, {pid: {'predicted': 70.0, 'values': {'roll_mean_28': 60.0, 'r
 @mock.patch.object(engine, 'save_raw_forecasts', return_value=3)
 @mock.patch.object(engine, 'forecast_store', side_effect=fake_forecast)
 class ExplainTests(Base):
-    """SHAP: quản lý xem từng món (nhóm nghiệp vụ, cửa hàng mình); quản trị viên xem thêm tổng thể và mọi cửa hàng."""
 
     def setUp(self):
         super().setUp()
@@ -683,10 +671,10 @@ class ExplainTests(Base):
         self.client.force_login(self.users['mgr1'])
         data = self.client.get(f'/api/line/{line.pk}/reason/').json()
         labels = {i['label']: i['value'] for i in data['contrib']['items']}
-        self.assertEqual(labels['Lượng bán gần đây'], 40.0)                                  # roll_mean_28 + roll_mean_7
+        self.assertEqual(labels['Lượng bán gần đây'], 40.0)
         self.assertEqual(labels['Khuyến mãi'], 8.0)
         self.assertEqual(labels['Thứ trong tuần'], -3.0)
-        self.assertNotIn('roll_mean_28', json.dumps(data['contrib']))                         # không lộ tên cột kỹ thuật
+        self.assertNotIn('roll_mean_28', json.dumps(data['contrib']))
 
     def test_manager_cannot_use_admin_explain_or_other_store(self, *_):
         line = self.line()
@@ -704,15 +692,15 @@ class ExplainTests(Base):
     def test_admin_sees_any_store_and_technical_detail(self, *_):
         line = self.line()
         self.client.force_login(self.users['adm'])
-        self.assertEqual(self.client.get(f'/api/line/{line.pk}/reason/').status_code, 200)    # mọi cửa hàng
+        self.assertEqual(self.client.get(f'/api/line/{line.pk}/reason/').status_code, 200)
         data = self.client.get('/api/admin/explain/?store=R02&product=M01').json()
         self.assertTrue(data['ok'], data)
-        self.assertEqual(data['importance_features'][0]['column'], 'roll_mean_28')            # tổng thể, tên cột kỹ thuật
+        self.assertEqual(data['importance_features'][0]['column'], 'roll_mean_28')
         self.assertEqual(data['importance_groups'][0]['label'], 'Lượng bán gần đây')
-        self.assertAlmostEqual(sum(g['share'] for g in data['importance_groups']), 100, delta=2)   # tỉ lệ % cộng lại ~100
+        self.assertAlmostEqual(sum(g['share'] for g in data['importance_groups']), 100, delta=2)
         self.assertTrue(data['item']['unit'])
-        self.assertEqual(data['item']['features'][0]['column'], 'roll_mean_28')               # chi tiết một món
-        self.assertEqual(data['item']['features'][0]['value'], '60')                          # số gốc làm tròn, không dài dòng
+        self.assertEqual(data['item']['features'][0]['column'], 'roll_mean_28')
+        self.assertEqual(data['item']['features'][0]['value'], '60')
 
     def test_admin_explain_validation(self, *_):
         self.client.force_login(self.users['adm'])

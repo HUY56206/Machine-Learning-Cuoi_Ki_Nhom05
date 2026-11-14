@@ -1,16 +1,9 @@
-"""Mô hình dữ liệu của web.
-
-Hai nhóm bảng cùng nằm trong MySQL `qsr_db`:
-  - Bảng do pipeline ML tạo (Database/qsr_schema.sql): khai báo managed=False, Django chỉ đọc/ghi, không migrate.
-  - Bảng của ứng dụng web (hồ sơ, kiểm kho, danh sách chuẩn bị, thông báo, cấu hình): do migration tạo.
-"""
 import datetime
 
 from django.conf import settings
 from django.db import models
 
 
-# ====================================================================== bảng của pipeline ML
 class Store(models.Model):
     restaurant_id = models.CharField(max_length=10, primary_key=True)
     restaurant_name = models.CharField(max_length=100)
@@ -85,7 +78,6 @@ class Promotion(models.Model):
 
 
 class Forecast(models.Model):
-    """Bảng `forecasts` do QSRInventory.saveForecasts ghi; web dùng để lưu dự báo thô theo ngày."""
     forecast_id = models.AutoField(primary_key=True)
     forecast_date = models.DateField()
     restaurant = models.ForeignKey(Store, models.DO_NOTHING, db_column='restaurant_id', db_constraint=False)
@@ -102,7 +94,6 @@ class Forecast(models.Model):
         db_table = 'forecasts'
 
 
-# ====================================================================== bảng của web
 class Role(models.TextChoices):
     MANAGER = 'manager', 'Quản lý cửa hàng'
     STAFF = 'staff', 'Nhân viên bếp/kho'
@@ -110,7 +101,6 @@ class Role(models.TextChoices):
 
 
 class Profile(models.Model):
-    """Mở rộng auth.User: vai trò, cửa hàng phụ trách và tùy chọn thông báo."""
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='profile')
     role = models.CharField(max_length=10, choices=Role.choices)
     store = models.ForeignKey(Store, on_delete=models.SET_NULL, null=True, blank=True, related_name='+',
@@ -124,7 +114,6 @@ class Profile(models.Model):
 
 
 class SystemConfig(models.Model):
-    """Cấu hình hệ thống – chỉ một dòng (pk=1)."""
     SERVICE_LEVELS = {90: 1.28, 95: 1.65, 99: 2.33}
 
     operating_date = models.DateField(help_text='Ngày vận hành hiện tại (demo: 30/10/2025). Dự báo cho ngày kế tiếp.')
@@ -148,7 +137,6 @@ class SystemConfig(models.Model):
 
 
 class InventoryCount(models.Model):
-    """Một lần kiểm kho. Bản nháp (draft) mỗi cửa hàng/ngày chỉ có một; mỗi lần lưu tạo thêm bản saved."""
     class Status(models.TextChoices):
         DRAFT = 'draft', 'Đã lưu nháp'
         SAVED = 'saved', 'Đã lưu'
@@ -180,7 +168,6 @@ class InventoryItem(models.Model):
 
 
 class PrepPlan(models.Model):
-    """Đề xuất chuẩn bị hàng cho một ngày phục vụ. Chạy dự báo lại tạo phiên bản mới (version + 1)."""
     class Status(models.TextChoices):
         PENDING = 'pending', 'Chờ duyệt'
         APPROVED = 'approved', 'Đã duyệt'

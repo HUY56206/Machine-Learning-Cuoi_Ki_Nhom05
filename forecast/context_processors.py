@@ -4,7 +4,6 @@ from forecast.services.notifications import visible_for
 
 
 def qsr(request):
-    """Biến dùng chung cho base.html: vai trò, cửa hàng, ngày vận hành, số thông báo chưa đọc."""
     user = request.user
     profile = getattr(user, 'profile', None) if user.is_authenticated else None
     if not profile:

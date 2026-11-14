@@ -1,15 +1,7 @@
-"""Mô hình cơ sở (benchmark) - không cần học tham số.
-
-- Seasonal Naive (m=7): y_hat(t) = y(t-7)              -> cột lag_7
-- Moving Average 7   : y_hat(t) = mean(y(t-7..t-1))   -> cột roll_mean_7
-
-Mọi mô hình học máy phải có wMAPE thấp hơn các mốc này mới có ý nghĩa.
-"""
 from Models.QSRMLModel import QSRMLModel
 
 
 class ColumnModel:
-    """'Mô hình' trả về nguyên một cột đặc trưng làm dự báo."""
 
     def __init__(self, column):
         self.column = column

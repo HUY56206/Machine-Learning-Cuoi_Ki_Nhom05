@@ -1,5 +1,4 @@
 class MetricsResult:
-    """Kết quả đánh giá mô hình. wMAPE là chỉ số trọng tâm của đề tài."""
 
     def __init__(self, MAE=None, MSE=None, RMSE=None, R2_SCORE=None, WMAPE=None, BIAS=None,
                  model_name=None, split=None, n_rows=None):
@@ -8,7 +7,7 @@ class MetricsResult:
         self.RMSE = RMSE
         self.R2_SCORE = R2_SCORE
         self.WMAPE = WMAPE
-        self.BIAS = BIAS        # > 0: dự báo dư (thừa hàng) | < 0: dự báo thiếu (cháy hàng)
+        self.BIAS = BIAS
         self.model_name = model_name
         self.split = split
         self.n_rows = n_rows

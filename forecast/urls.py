@@ -10,22 +10,22 @@ urlpatterns = [
     path('logout/', views.logout_view, name='logout'),
     path('profile/', views.profile, name='profile'),
     path('no-access/', views.no_access, name='no_access'),
-    # Quản lý cửa hàng
+
     path('dashboard/', views.dashboard, name='dashboard'),
     path('prep/', views.prep, name='prep'),
     path('prep/export/', views.prep_export, name='prep_export'),
     path('forecast/', views.forecast, name='forecast'),
     path('report/', views.report, name='report'),
-    # Quản trị viên
+
     path('admin-data/', views.data, name='data'),
     path('admin-model/', views.model, name='model'),
     path('admin-stores/', views.stores, name='stores'),
     path('admin-accounts/', views.accounts, name='accounts'),
     path('admin-config/', views.config, name='config'),
-    # Nhân viên bếp/kho
+
     path('staff/prep/', views.staff_prep, name='staff_prep'),
     path('staff/inventory/', views.inventory, name='inventory'),
-    # API
+
     path('api/forecast/run/', api.run_forecast, name='api_run_forecast'),
     path('api/plan/<int:plan_id>/', api.plan_detail, name='api_plan_detail'),
     path('api/plan/<int:plan_id>/adjust/', api.adjust_plan, name='api_adjust_plan'),
@@ -40,7 +40,7 @@ urlpatterns = [
     path('api/profile/password/', api.change_password, name='api_change_password'),
     path('api/profile/prefs/', api.save_prefs, name='api_save_prefs'),
     path('api/password-reset/', api.password_reset_request, name='api_password_reset'),
-    # API quản trị viên
+
     path('api/admin/data/missing/', api_admin.data_missing, name='api_admin_missing'),
     path('api/admin/data/import/', api_admin.data_import, name='api_admin_import'),
     path('api/admin/forecast/run/', api_admin.run_store, name='api_admin_run'),

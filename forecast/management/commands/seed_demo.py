@@ -1,10 +1,3 @@
-"""Tạo dữ liệu mẫu để chạy thử web: cấu hình, tài khoản theo thiết kế, lịch sử kiểm kho và một đề xuất chờ duyệt.
-
-    python manage.py seed_demo            # tạo tài khoản cho toàn bộ 15 cửa hàng (mật khẩu riêng từng tài khoản)
-    python manage.py seed_demo --no-plan  # không chạy dự báo mẫu
-    python manage.py seed_demo --reset    # xóa mọi đề xuất, kiểm kho, thông báo và đưa cấu hình về mặc định trước khi tạo lại
-Chạy lại được nhiều lần (idempotent).
-"""
 import random
 from datetime import date, datetime, time, timedelta
 
@@ -18,7 +11,7 @@ from forecast.models import (DailySale, InventoryCount, InventoryItem, Notificat
 from forecast.services import adminops, plans
 
 ACCOUNTS = [
-    # (tên đăng nhập, mật khẩu, tên hiển thị, vai trò, cửa hàng) – sinh ngẫu nhiên một lần, mỗi tài khoản khác nhau
+
     ('lan.r01', 'vjtSKDEP%96', 'Quản lý R01', Role.MANAGER, 'R01'),
     ('khanh.r01', 'UTxmJhkV!40', 'Nhân viên R01', Role.STAFF, 'R01'),
     ('trang.r02', '7AXSTTwM!86', 'Quản lý R02', Role.MANAGER, 'R02'),
@@ -51,7 +44,7 @@ ACCOUNTS = [
     ('ha.r15', 'Lf7h7KrC#37', 'Nhân viên R15', Role.STAFF, 'R15'),
     ('admin', 'VaHhXjMc!75', 'Quản trị viên', Role.ADMIN, None),
 ]
-# (số ngày trước ngày vận hành, giờ, phút)
+
 COUNT_HISTORY = [(1, 14, 10), (1, 21, 45), (0, 14, 0)]
 
 
@@ -78,7 +71,7 @@ class Command(BaseCommand):
                 'role': role, 'store': Store.objects.get(pk=store_id) if store_id else None})
         self.stdout.write(self.style.SUCCESS(f'Đã tạo {len(ACCOUNTS)} tài khoản (xem bảng trong Kich_Ban.md).'))
 
-        # Chỉ R01, R02 có sẵn lịch sử kiểm kho; R03–R15 để trống cho kịch bản kiểm thử kiểm kho từ đầu.
+
         staff = {s: u for u, _, _, r, s in ACCOUNTS if r == Role.STAFF}
         for store_id in ('R01', 'R02'):
             self._seed_inventory(Store.objects.get(pk=store_id), User.objects.get(username=staff[store_id]), config)
@@ -93,18 +86,16 @@ class Command(BaseCommand):
         self.stdout.write(self.style.SUCCESS('Xong.'))
 
     def _reset(self):
-        """Đưa phần dữ liệu web về trạng thái ban đầu; không đụng bảng dữ liệu ML (bán hàng, thời tiết, khuyến mãi…)."""
         plans_n = PrepPlan.objects.count()
         counts_n = InventoryCount.objects.count()
         PrepPlan.objects.all().delete()
         InventoryCount.objects.all().delete()
         Notification.objects.all().delete()
-        SystemConfig.objects.filter(pk=1).delete()                  # SystemConfig.get() tạo lại với giá trị mặc định
+        SystemConfig.objects.filter(pk=1).delete()
         SystemConfig.get()
         self.stdout.write(self.style.WARNING(f'Đã xóa {plans_n} đề xuất, {counts_n} lần kiểm kho và mọi thông báo; cấu hình về mặc định.'))
 
     def _seed_inventory(self, store, user, config):
-        """Tồn mô phỏng = 0,2–1,1 lần bán trung bình 7 ngày (dataset không có tồn kho thực tế)."""
         products = list(Product.objects.all())
         rng = random.Random(f'{store.pk}-{config.operating_date}')
         for days_ago, hour, minute in COUNT_HISTORY:

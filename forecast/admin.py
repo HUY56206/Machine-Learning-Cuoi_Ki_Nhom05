@@ -1,4 +1,3 @@
-"""Django Admin: cửa hàng, cấu hình hệ thống (theo mô tả nghiệp vụ QTV-4, QTV-5) và dữ liệu vận hành."""
 from django.contrib import admin
 
 from forecast.models import (InventoryCount, Notification, PrepPlan, Product, Profile, Store, SystemConfig)
@@ -12,7 +11,6 @@ class StoreAdmin(admin.ModelAdmin):
 
 @admin.register(SystemConfig)
 class SystemConfigAdmin(admin.ModelAdmin):
-    """Chỉ một dòng cấu hình; chỗ duy nhất đổi ngày vận hành và bật/tắt bắt buộc duyệt."""
     list_display = ('operating_date', 'service_level', 'require_approval', 'prep_deadline', 'inventory_reminder')
 
     def has_add_permission(self, request):

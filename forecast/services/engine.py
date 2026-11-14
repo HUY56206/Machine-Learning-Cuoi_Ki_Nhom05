@@ -1,4 +1,3 @@
-"""Cầu nối giữa web và pipeline ML (Models/, Connectors/): nạp mô hình đã train và dự báo một cửa hàng / một ngày."""
 import threading
 
 import pandas as pd
@@ -10,18 +9,17 @@ from Utils import Config
 from Utils.FileUtil import FileUtil
 
 MODEL_FILE = 'best_model.joblib'
-HISTORY_DAYS = 60          # đủ để tạo lag_28 / roll_28 (xem Tests/AppInventory.py)
+HISTORY_DAYS = 60
 
 _lock = threading.Lock()
 _trained = None
 
 
 class NoForecastData(Exception):
-    """Không có dữ liệu đầu vào (bán hàng / thời tiết) cho ngày được chọn."""
+    pass
 
 
 def trained_model():
-    """Nạp best_model.joblib một lần cho cả tiến trình (file lớn, nạp lại mỗi request sẽ rất chậm)."""
     global _trained
     with _lock:
         if _trained is None:
@@ -32,7 +30,6 @@ def trained_model():
 
 
 def forecast_store(store_id, service_date, z=Config.SERVICE_LEVEL_Z):
-    """Trả về DataFrame mỗi món một dòng: predicted_qty, safety_stock, baseline (TB 7 ngày trước)."""
     tm = trained_model()
     connector = Connector()
     if not connector.connect():
@@ -53,7 +50,7 @@ def forecast_store(store_id, service_date, z=Config.SERVICE_LEVEL_Z):
         except ValueError as exc:
             raise NoForecastData(str(exc)) from exc
 
-        # "Bình thường" = trung bình 7 ngày liền trước ngày phục vụ
+
         prior = df[(df[Config.DATE_COL] < service_date) &
                    (df[Config.DATE_COL] >= service_date - pd.Timedelta(days=7))]
         base = prior.groupby('menu_item_id')[Config.TARGET].mean().rename('baseline_qty')
@@ -67,7 +64,6 @@ def forecast_store(store_id, service_date, z=Config.SERVICE_LEVEL_Z):
 
 
 def save_raw_forecasts(plan_df, current_stock, recommended):
-    """Ghi vào bảng `forecasts` (hợp đồng cũ của pipeline) để các công cụ khác vẫn đọc được."""
     connector = Connector()
     if not connector.connect():
         return 0
@@ -81,11 +77,6 @@ def save_raw_forecasts(plan_df, current_stock, recommended):
 
 
 def accuracy_by_day(store_id, start, end):
-    """Sai số wMAPE (%) theo ngày trong [start, end] tại một cửa hàng, gộp theo món.
-
-    Dùng quantity_raw và bỏ dòng is_imputed như Tests/AppCompareModels (đánh giá trên số liệu gốc).
-    Trả về list[(date, wmape_percent)] chỉ cho các ngày có số bán thực tế.
-    """
     tm = trained_model()
     connector = Connector()
     if not connector.connect():
@@ -115,10 +106,6 @@ def accuracy_by_day(store_id, start, end):
 
 
 def explain_store(store_id, service_date):
-    """TreeSHAP (CatBoost) cho mọi món của một cửa hàng trong một ngày.
-
-    Trả về (base, rows): base = mức nền của mô hình; rows[menu_item_id] = {'predicted', 'values': {cột: giá trị},
-    'shap': {cột: đóng góp}}. Tổng base + các đóng góp = dự báo thô của mô hình (trước khi chặn ≥ 0)."""
     from catboost import Pool
     tm = trained_model()
     connector = Connector()
@@ -139,7 +126,7 @@ def explain_store(store_id, service_date):
             raise NoForecastData(str(day.date()))
         X = model.prepareX(part)
         cats = [c for c in X.columns if c in tm.categorical_columns]
-        sv = tm.model.get_feature_importance(Pool(X, cat_features=cats), type='ShapValues')   # cột cuối = mức nền
+        sv = tm.model.get_feature_importance(Pool(X, cat_features=cats), type='ShapValues')
     finally:
         connector.disConnect()
     cols = list(X.columns)

@@ -1,12 +1,3 @@
-"""Phân tích đóng góp của từng nhóm đặc trưng (ablation) với CatBoost.
-
-Chạy: python -m Tests.AppAblation          (1000 vòng mỗi lần huấn luyện)
-      python -m Tests.AppAblation --fast   (300 vòng, chạy thử)
-      python -m Tests.AppAblation --full   (3000 vòng như mô hình chính)
-
-Mỗi lần bỏ một nhóm đặc trưng, huấn luyện lại và đo trên tập test. Kết quả ghi vào
-Assets/reports/ablation.csv và Assets/figures/ablation.png.
-"""
 import sys
 
 import matplotlib.pyplot as plt

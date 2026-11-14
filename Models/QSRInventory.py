@@ -1,12 +1,3 @@
-"""Quản trị tồn kho từ kết quả dự báo (USE MODEL - bước 11).
-
-    Safety Stock      = z x RMSE(nhà hàng, món) x sqrt(lead time)    (z = 1.65 <-> mức phục vụ 95%)
-    Lượng cần chuẩn bị = max(0, Dự báo + Safety Stock - Tồn hiện tại)
-    Cảnh báo          : Tồn hiện tại < Safety Stock  -> nguy cơ hết hàng (tô đỏ trên giao diện)
-
-RMSE lấy riêng cho từng (nhà hàng, món) trên tập validation thay vì một con số chung,
-vì món bán ít mà dùng sai số chung sẽ bị trữ dư rất nhiều.
-"""
 import numpy as np
 import pandas as pd
 
@@ -31,15 +22,13 @@ class QSRInventory:
     def calcSafetyStock(self, forecast_df):
         rmse = self.trainedmodel.residual_rmse
         out = forecast_df.merge(rmse, on=Config.SERIES_KEYS, how="left")
-        # Chuỗi chưa có sai số riêng -> dùng trung vị sai số của các chuỗi khác
+
         out["residual_rmse"] = out["residual_rmse"].fillna(rmse["residual_rmse"].median())
         out["safety_stock"] = np.round(self.z * out["residual_rmse"] * np.sqrt(self.lead_time_days), 2)
         return out
 
     @staticmethod
     def simulateCurrentStock(forecast_df, random_state=Config.RANDOM_STATE):
-        """Dataset không có tồn kho thực tế -> mô phỏng tồn hiện tại trong khoảng 0-120% dự báo.
-        Khi triển khai thật, giá trị này lấy từ hệ thống quản lý kho của nhà hàng."""
         rng = np.random.default_rng(random_state)
         return np.floor(forecast_df["predicted_qty"] * rng.uniform(0, 1.2, len(forecast_df))).astype(int)
 
@@ -59,4 +48,4 @@ class QSRInventory:
             for r in plan_df.itertuples(index=False)
         ]
         connector.executeMany(UPSERT_FORECAST_SQL, rows)
-        return len(rows)    # rowcount của MySQL đếm 2 cho mỗi dòng bị UPDATE nên không dùng
+        return len(rows)

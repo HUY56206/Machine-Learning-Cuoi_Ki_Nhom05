@@ -1,10 +1,3 @@
-"""So sánh các mô hình và chọn mô hình tốt nhất để tích hợp.
-
-Chạy: python -m Tests.AppCompareModels   (sau khi đã chạy các App huấn luyện)
-
-Chọn theo wMAPE trên VALIDATION (không theo test) để kết quả test là ước lượng khách quan.
-Mô hình được chọn được sao chép thành Assets/best_model.joblib.
-"""
 import shutil
 
 import pandas as pd

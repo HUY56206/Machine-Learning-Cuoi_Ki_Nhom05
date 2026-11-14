@@ -11,7 +11,6 @@
   <button type="submit" class="h-11 px-5 rounded-lg bg-ink text-white font-medium">Xem dữ liệu</button>
 </form>
 
-<!-- Biểu đồ 7 ngày -->
 <section class="bg-white border border-ink/10 rounded-xl p-4 mb-10">
   <h2 class="font-medium mb-3">Lượng bán 7 ngày (phần)</h2>
   <div class="flex items-center gap-4 text-sm text-ink/70 mb-4">
@@ -31,7 +30,6 @@
   </div>
 </section>
 
-<!-- Thẻ thống kê -->
 <section class="grid grid-cols-3 gap-4 mb-4">
   {% if config.alert_red %}<div class="rounded-xl border border-[#F3B6B6] bg-gradient-to-r from-[#FDE3E3] to-[#FFF1F1] border-l-4 border-l-[#C0392B] px-4 py-4 flex items-center justify-between">
     <div class="text-[#9B1C1C]"><div class="text-[28px] font-bold leading-tight">{{ counts.short }} món</div><div class="font-bold text-lg">Thiếu hàng</div></div>
@@ -55,7 +53,6 @@
   </div>
 </section>
 
-<!-- Việc cần xử lý -->
 <section class="bg-white border border-ink/10 rounded-xl w-full lg:w-[74%] overflow-hidden">
   <div class="flex items-start justify-between p-4">
     <div>

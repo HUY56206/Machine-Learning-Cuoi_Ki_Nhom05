@@ -1,13 +1,3 @@
-"""Mô phỏng tác động kinh doanh của kế hoạch chuẩn bị hàng trên tập test.
-
-Chạy: python -m Tests.AppBusinessImpact   (sau khi đã huấn luyện các mô hình)
-
-Với mỗi dòng test (ngày, cửa hàng, món): lượng chuẩn bị = dự báo + z x RMSE(cửa hàng, món).
-So với nhu cầu thực tế quantity_raw:
-    thiếu hàng = max(0, thực tế - chuẩn bị)      thừa hàng = max(0, chuẩn bị - thực tế)
-So sánh CatBoost, LightGBM, Ridge và hai baseline ở nhiều mức phục vụ (mặc định nhấn mạnh 95 %).
-Kết quả ghi vào Assets/reports/business_impact.csv và Assets/figures/business_impact.png.
-"""
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -40,7 +30,7 @@ for name, file in MODELS.items():
     if m.loadModel(file) is None:
         print(f"Bỏ qua {name}: không nạp được {file}")
         continue
-    m.evaluate("val")                    # tính lại RMSE theo (cửa hàng, món) trên validation
+    m.evaluate("val")
 
     test = m.test[m.test["is_imputed"] == 0].copy()
     test["pred"] = m.predict(test)

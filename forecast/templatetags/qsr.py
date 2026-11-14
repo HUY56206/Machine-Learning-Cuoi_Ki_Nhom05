@@ -5,7 +5,6 @@ register = template.Library()
 
 @register.filter
 def thousands(value):
-    """1234567 -> 1.234.567 (định dạng Việt Nam)."""
     try:
         return f'{int(round(float(value))):,}'.replace(',', '.')
     except (TypeError, ValueError):

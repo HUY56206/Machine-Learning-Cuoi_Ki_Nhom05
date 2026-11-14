@@ -1,4 +1,3 @@
-"""LightGBM Regressor - gradient boosting dạng lá, nhanh, xử lý tốt quan hệ phi tuyến."""
 import lightgbm as lgb
 
 from Models.QSRMLModel import QSRMLModel
@@ -10,7 +9,7 @@ class QSRLightGBM(QSRMLModel):
     categorical_mode = "category"
 
     PARAMS = dict(
-        objective="tweedie", tweedie_variance_power=1.2,   # phù hợp dữ liệu đếm (số lượng bán)
+        objective="tweedie", tweedie_variance_power=1.2,
         n_estimators=3000, learning_rate=0.05, num_leaves=127, min_child_samples=50,
         subsample=0.8, subsample_freq=1, colsample_bytree=0.8,
         random_state=Config.RANDOM_STATE, n_jobs=-1, verbose=-1,
@@ -19,7 +18,7 @@ class QSRLightGBM(QSRMLModel):
 
     def __init__(self, connector=None, fast=False):
         super().__init__(connector)
-        self.fast = fast        # True: 300 vòng để chạy thử nhanh
+        self.fast = fast
 
     def fitModel(self, X_train, y_train, X_val, y_val):
         params = {**self.PARAMS, **({"n_estimators": 300} if self.fast else {})}
