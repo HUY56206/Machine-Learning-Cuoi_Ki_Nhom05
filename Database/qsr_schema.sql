@@ -1,6 +1,6 @@
 -- =====================================================================
 -- CSDL QSR Demand Forecasting  (MySQL 8.0+)
--- Chạy:  mysql -u root -p < Database/qsr_schema.sql   (hoặc python -m Tests.AppPrepareData)
+-- Chạy:  mysql -u root -p < Database/qsr_schema.sql   (hoặc python -m scripts.AppPrepareData)
 --
 -- 5 bảng nghiệp vụ : stores, products, daily_sales, promotions, weather_events
 -- 1 bảng kết quả   : forecasts (lưu dự báo + tồn kho an toàn cho web Django)

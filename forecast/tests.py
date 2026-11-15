@@ -38,6 +38,8 @@ class Base(TestCase):
                 editor.delete_model(m)
 
     def setUp(self):
+        from django.core.cache import cache
+        cache.clear()  # bộ giới hạn đăng nhập dùng cache, tránh rò rỉ giữa các test
         self.r01 = Store.objects.create(restaurant_id='R01', restaurant_name='Downtown', city='Chicago', state='IL')
         self.r02 = Store.objects.create(restaurant_id='R02', restaurant_name='Wrigley', city='Chicago', state='IL')
         for pid, name, cat in [('M01', 'Classic Cheeseburger', 'Burgers'), ('M02', 'French Fries Regular', 'Sides'),

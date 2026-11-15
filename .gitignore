@@ -18,7 +18,7 @@ data/
 # Mật khẩu CSDL
 .env
 
-# Mô hình đã train (sinh lại bằng các file Tests/App*.py)
+# Mô hình đã train (sinh lại bằng các file scripts/*.py)
 Assets/*.joblib
 Assets/*.pkl
 Assets/catboost_info/
@@ -38,3 +38,6 @@ Assets/figures/
 # Bản xuất CSDL (nặng, gửi riêng cho nhóm, không đẩy lên GitHub)
 *.sql.gz
 qsr_db.sql
+
+# Dữ liệu nạp sẵn cho giảng viên (8 MB, ghi đè luật *.sql.gz ở trên)
+!Database/qsr_data.sql.gz
