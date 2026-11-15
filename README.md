@@ -122,6 +122,9 @@ ML_QSR/                              (thư mục gốc dự án)
 │   ├── AppBusinessImpact.py         đánh giá tác động nghiệp vụ của các mô hình ở các mức phục vụ 90%, 95%, 99%
 │   └── AppInventory.py              sinh kế hoạch tồn kho cho một ngày
 │
+├── notebook/
+│   └── ML_HK7.ipynb                 notebook phân tích khám phá dữ liệu (EDA): cấu trúc dữ liệu, làm sạch, nhu cầu theo thời gian, cuối tuần, cửa hàng, ...
+│
 └── Tests/                           11 test cho phần ML
     ├── test_model.py                chống rò rỉ dữ liệu (lag, rolling), chia tập, đánh giá
     └── test_inventory.py            kiểm tra tính tồn kho
